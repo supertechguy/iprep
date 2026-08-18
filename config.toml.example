@@ -1,0 +1,10 @@
+# Copy to ~/.config/iprep/config.toml and fill in the keys you have.
+# Env vars (VT_API_KEY, ABUSEIPDB_API_KEY, SHODAN_API_KEY, GREYNOISE_API_KEY,
+# SPAMHAUS_DQS_KEY) always take precedence over this file if both are set.
+
+[keys]
+virustotal = ""
+abuseipdb = ""
+shodan = ""
+greynoise = ""
+spamhaus_dqs = ""
