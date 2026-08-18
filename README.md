@@ -52,11 +52,27 @@ a well-known cloud provider's range").
 ## Install
 
 ```bash
+./install.sh
+```
+
+By default this installs `iprep` globally via [pipx](https://pipx.pypa.io/)
+(isolated from your system Python, `iprep` ends up on your `PATH`), offering
+to install pipx first if you don't have it. Flags:
+
+- `./install.sh --pipx` — force the pipx path (errors if pipx isn't present)
+- `./install.sh --venv` — install into a local `.venv/` in this repo instead
+  (you'll `source .venv/bin/activate` before running `iprep`)
+- `./install.sh --yes` — non-interactive; auto-accepts installing pipx if missing
+
+Or do it by hand:
+
+```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
 ```
 
-This installs an `iprep` command (see `pyproject.toml`'s `[project.scripts]`).
+Either way this installs an `iprep` command (see `pyproject.toml`'s
+`[project.scripts]`).
 
 ## API keys
 
