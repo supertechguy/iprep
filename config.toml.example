@@ -1,6 +1,9 @@
-# Copy to ~/.config/iprep/config.toml and fill in the keys you have.
+# Reference only - prefer `iprep keys set <source>` to manage the real file,
+# which lives at ~/.config/iprep/config.toml (owner-only permissions) and is
+# never part of this repo.
+#
 # Env vars (VT_API_KEY, ABUSEIPDB_API_KEY, SHODAN_API_KEY, GREYNOISE_API_KEY,
-# SPAMHAUS_DQS_KEY) always take precedence over this file if both are set.
+# SPAMHAUS_DQS_KEY) always take precedence over the config file if both are set.
 
 [keys]
 virustotal = ""

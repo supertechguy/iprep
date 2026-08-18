@@ -62,23 +62,44 @@ This installs an `iprep` command (see `pyproject.toml`'s `[project.scripts]`).
 
 None are required to run the tool — sources without a configured key report
 `n/a` with a link to sign up, and the verdict is computed from whatever did
-respond. To add keys, either set environment variables or copy
-`config.toml.example` to `~/.config/iprep/config.toml` and fill it in (env
-vars win if both are set):
+respond.
 
-- `VT_API_KEY` — https://www.virustotal.com/gui/join-us (free, 4 req/min / 500 per day)
-- `ABUSEIPDB_API_KEY` — https://www.abuseipdb.com/register (free, 1000 checks/day)
-- `SHODAN_API_KEY` — https://account.shodan.io/register (paid, "Freelancer" tier is ~$1/mo)
-- `GREYNOISE_API_KEY` — https://viz.greynoise.io/signup (free community tier, optional but recommended)
-- `SPAMHAUS_DQS_KEY` — optional, only needed if you outgrow the free public DNSBL mirror's low-volume usage policy
+**Add keys with the built-in `iprep keys` command** — it writes to
+`~/.config/iprep/config.toml` (owner-only permissions, `0600`), which lives
+under your home directory and is never part of this git repo, so keys never
+end up committed or pushed:
+
+```bash
+iprep keys set virustotal          # prompts for the key with hidden input
+iprep keys set abuseipdb <key>     # or pass it directly as an argument
+iprep keys show                    # list what's configured (values masked)
+iprep keys unset shodan            # remove a stored key
+iprep keys path                    # print the config file location
+```
+
+Sign up for keys here:
+
+- `virustotal` — https://www.virustotal.com/gui/join-us (free, 4 req/min / 500 per day)
+- `abuseipdb` — https://www.abuseipdb.com/register (free, 1000 checks/day)
+- `shodan` — https://account.shodan.io/register (paid, "Freelancer" tier is ~$1/mo)
+- `greynoise` — https://viz.greynoise.io/signup (free community tier, optional but recommended)
+- `spamhaus_dqs` — optional, only needed if you outgrow the free public DNSBL mirror's low-volume usage policy
+
+Environment variables (`VT_API_KEY`, `ABUSEIPDB_API_KEY`, `SHODAN_API_KEY`,
+`GREYNOISE_API_KEY`, `SPAMHAUS_DQS_KEY`) still work too and take precedence
+over the config file — handy for CI or if you'd rather manage secrets in a
+password manager/secret store than on disk. `config.toml.example` in this
+repo is just a template for reference; it holds no real keys and is safe to
+commit.
 
 ## Usage
 
 ```bash
-iprep 1.2.3.4                       # full report
+iprep 1.2.3.4                       # full report (shorthand for `iprep check 1.2.3.4`)
 iprep 1.2.3.4 --json                # machine-readable output for scripting
-iprep 1.2.3.4 --sources vt,abuseipdb,spamhaus   # only query specific sources
+iprep 1.2.3.4 --sources virustotal,abuseipdb,spamhaus   # only query specific sources
 iprep 1.2.3.4 --refresh-lists       # force re-download of cached blocklists
+iprep keys set virustotal           # add an API key (see "API keys" above)
 ```
 
 FireHOL/Talos/Tor lists are cached under `~/.cache/iprep/` (TTLs: FireHOL 24h,

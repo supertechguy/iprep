@@ -21,7 +21,7 @@ PBL_CODES = {"127.0.0.10", "127.0.0.11"}
 SETUP_HINT = (
     "Free public DNSBL lookups are used by default (fine for personal, low-volume use). "
     "For heavier/production use, get a Spamhaus DQS key (https://www.spamhaus.com/product/data-query-service/) "
-    "and set SPAMHAUS_DQS_KEY for a more reliable, higher-volume endpoint."
+    "then run `iprep keys set spamhaus_dqs` for a more reliable, higher-volume endpoint."
 )
 
 

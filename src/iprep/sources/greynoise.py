@@ -8,7 +8,8 @@ from ..context import Context
 API_URL = "https://api.greynoise.io/v3/community/{ip}"
 SETUP_HINT = (
     "Optional: free GreyNoise Community API key at https://viz.greynoise.io/signup "
-    "helps distinguish mass internet scanners from targeted attackers. Set GREYNOISE_API_KEY."
+    "helps distinguish mass internet scanners from targeted attackers. "
+    "Run `iprep keys set greynoise`."
 )
 
 

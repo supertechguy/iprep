@@ -6,3 +6,10 @@ venv/
 build/
 dist/
 .env
+.env.*
+
+# Defensive: real key files should only ever live at ~/.config/iprep/,
+# never inside the repo - but ignore them here too in case one lands here.
+config.toml
+config.local.toml
+.iprep/

@@ -8,7 +8,7 @@ from ..context import Context
 API_URL = "https://api.abuseipdb.com/api/v2/check"
 SETUP_HINT = (
     "Get a free AbuseIPDB API key at https://www.abuseipdb.com/register "
-    "(1000 checks/day) and set ABUSEIPDB_API_KEY."
+    "(1000 checks/day), then run `iprep keys set abuseipdb`."
 )
 
 

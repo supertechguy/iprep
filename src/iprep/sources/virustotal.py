@@ -8,7 +8,7 @@ from ..context import Context
 API_URL = "https://www.virustotal.com/api/v3/ip_addresses/{ip}"
 SETUP_HINT = (
     "Get a free VirusTotal API key at https://www.virustotal.com/gui/join-us "
-    "(4 req/min, 500/day) and set VT_API_KEY."
+    "(4 req/min, 500/day), then run `iprep keys set virustotal`."
 )
 
 

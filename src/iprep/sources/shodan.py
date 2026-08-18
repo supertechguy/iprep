@@ -8,7 +8,7 @@ from ..context import Context
 API_URL = "https://api.shodan.io/shodan/host/{ip}"
 SETUP_HINT = (
     "Shodan requires a paid-ish API key (the $1/mo 'Freelancer' tier works) at "
-    "https://account.shodan.io/register; set SHODAN_API_KEY."
+    "https://account.shodan.io/register, then run `iprep keys set shodan`."
 )
 RISKY_TAGS = {"malware", "c2", "compromised", "honeypot", "botnet"}
 
