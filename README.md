@@ -142,6 +142,29 @@ iprep 1.2.3.4 --refresh-lists       # force re-download of cached blocklists
 iprep keys set virustotal           # add an API key (see "API keys" above)
 ```
 
+### Batch mode
+
+Check every IP in a file (e.g. pulled from firewall/IDS logs) in one go:
+
+```bash
+iprep batch ips.txt                        # summary table, one row per IP
+iprep batch ips.txt --csv -o results.csv    # ip,verdict,score,sources_ok,sources_total,flagged_by
+iprep batch ips.txt --json -o results.json  # full per-source detail for every IP
+grep 'DENY' firewall.log | awk '{print $5}' | iprep batch -   # pipe IPs in via stdin ("-")
+```
+
+`ips.txt` is one IP (v4 or v6) per line; blank lines and `#`-comments are
+skipped, duplicates are deduped, and unparseable lines are skipped with a
+warning rather than aborting the whole run. IPs are checked `--parallel`
+at a time (default 4, each still fanning out across all its sources
+concurrently, same as single-IP mode) and reuse one warm blocklist cache
+across the whole file. Progress and the final tally print to stderr, so
+stdout stays clean for `--json`/`--csv` piping.
+
+If you have low-quota keyed sources configured (VirusTotal's free tier is
+4 requests/minute), either lower `--parallel`, or restrict a large batch run
+to the no-key sources with `--sources`.
+
 All the blocklist/list-based feeds (FireHOL, Talos, CINS Army, Blocklist.de,
 ipsum, Emerging Threats, Tor, VPN/Proxy) are cached under `~/.cache/iprep/`
 (TTLs range from 1h to 24h depending on how often the upstream feed updates)
@@ -177,19 +200,15 @@ Roughly in order of value if you want to extend this:
    story than one whose worst report was 3 years ago).
 2. **AlienVault OTX** — free API key, pulse data (which threat campaigns/IOC
    lists reference this IP), good complement to VT/AbuseIPDB.
-3. **A `batch` mode** reading a file of IPs (e.g. from firewall/IDS logs) and
-   emitting a CSV/JSON summary — the architecture already supports this
-   cleanly since `check(ip, ctx)` is stateless per-IP; you'd just loop and
-   reuse one `Context` (and therefore one warm blocklist cache) across all of
-   them.
-4. **CIDR/subnet rollup.** If you're investigating an incident, seeing "this
+3. **CIDR/subnet rollup.** If you're investigating an incident, seeing "this
    /24 has 6 other IPs also flagged in the last 90 days" is often more
-   actionable than any single-IP verdict.
-5. **Local result caching with a short TTL** (minutes, not hours) so
+   actionable than any single-IP verdict. (`iprep batch` gets you partway
+   there today if you already have the candidate IP list.)
+4. **Local result caching with a short TTL** (minutes, not hours) so
    re-running `iprep` on the same IP a few times while investigating doesn't
    burn API quota — separate from the long-TTL blocklist cache that already
    exists.
-6. **Full IPv6 parity.** Talos, FireHOL, CINS Army, ipsum, Emerging Threats,
+5. **Full IPv6 parity.** Talos, FireHOL, CINS Army, ipsum, Emerging Threats,
    and the Tor exit list are IPv4-only at the source (confirmed against the
    live feeds) — no fix on `iprep`'s end will close that, short of finding
    IPv6-native replacements for each. Spamhaus, ASN, RDAP, reverse DNS,
