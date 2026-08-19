@@ -3,7 +3,8 @@
 # never part of this repo.
 #
 # Env vars (VT_API_KEY, ABUSEIPDB_API_KEY, SHODAN_API_KEY, GREYNOISE_API_KEY,
-# SPAMHAUS_DQS_KEY) always take precedence over the config file if both are set.
+# SPAMHAUS_DQS_KEY, OTX_API_KEY, THREATFOX_API_KEY, CROWDSEC_API_KEY) always
+# take precedence over the config file if both are set.
 
 [keys]
 virustotal = ""
@@ -11,3 +12,6 @@ abuseipdb = ""
 shodan = ""
 greynoise = ""
 spamhaus_dqs = ""
+otx = ""
+threatfox = ""
+crowdsec = ""

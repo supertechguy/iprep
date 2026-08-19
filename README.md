@@ -34,6 +34,13 @@ $ iprep 45.142.212.10
 | **Blocklist.de** | Crowdsourced fail2ban-style abuse reports (SSH/mail/web bruteforce) | No | Yes |
 | **ipsum** | How many distinct public blocklists (of dozens aggregated) flag this IP | No | No (feed is IPv4-only) |
 | **Emerging Threats** | Membership on Proofpoint/ET's open compromised-hosts feed | No | No (feed is IPv4-only) |
+| **Feodo Tracker** | Membership on abuse.ch's small, tightly-scoped active botnet C2 server list | No | No (feed is IPv4-only) |
+| **Barracuda RBL** | Barracuda Reputation Block List DNSBL lookup | No | No (unconfirmed, skipped to avoid a false clean) |
+| **DShield** | Whether the IP falls in SANS ISC's top ~20 currently-attacking /24 netblocks | No | No (feed is IPv4-only) |
+| **Binary Defense** | Membership on Binary Defense's honeypot-derived banlist | No | No (feed is IPv4-only) |
+| **AlienVault OTX** | How many threat-intel "pulses" (curated IOC collections) reference this IP, and their names | No (works unauthenticated; optional free key raises rate limit) | Yes |
+| **ThreatFox** | abuse.ch malware IOC match — malware family, threat type, confidence level | Yes (free, instant signup) | Unverified |
+| **CrowdSec CTI** | Crowd-sourced reputation/confidence/behaviors from CrowdSec's sensor network | Yes (free, 120 lookups/month) | Unverified |
 | **GreyNoise** | Internet-scanner vs. targeted-attacker classification, RIOT (known-benign service) tagging | Optional (free tier) | Unverified |
 | **RDAP/Whois** | Org, network name, country, abuse contact — via `rdap.org` (structured, no legacy whois parsing) | No | Yes |
 | **ASN** | Announcing AS number/name and BGP prefix, via Team Cymru's DNS service | No | Yes |
@@ -44,6 +51,11 @@ $ iprep 45.142.212.10
 \* Spamhaus IPv6 ZEN lookups work (verified live) but aren't documented on
 their free public-mirror FAQ the way the IPv4 syntax is — `iprep` flags this
 in the summary so you can weigh it accordingly.
+
+**Not included: SSLBL.** abuse.ch's SSL-certificate-based IP blocklist looked
+like an easy companion to Feodo Tracker, but it turned out to have been
+deprecated by abuse.ch on 2025-01-03 (the feed URL still returns 200 but is
+empty) — not worth wiring up.
 
 Every source that can't cover an address family reports that plainly
 (`verdict: unknown`, e.g. "FireHOL level1-3 aggregates are IPv4-only")
@@ -124,11 +136,20 @@ Sign up for keys here:
 - `shodan` — https://account.shodan.io/register (paid, "Freelancer" tier is ~$1/mo)
 - `greynoise` — https://viz.greynoise.io/signup (free community tier, optional but recommended)
 - `spamhaus_dqs` — optional, only needed if you outgrow the free public DNSBL mirror's low-volume usage policy
+- `otx` — https://otx.alienvault.com/ (optional — OTX already works with no key; a free key just raises the rate limit)
+- `threatfox` — https://auth.abuse.ch/ (free, instant signup via GitHub/Google/etc, no approval wait)
+- `crowdsec` — https://app.crowdsec.net (free, 120 lookups/month)
+
+If VirusTotal's free tier (500/day, 4/min) is too tight for how often you
+check IPs, most of the sources above need no key at all, and OTX/ThreatFox
+both have generous or nonexistent free-tier limits — `--sources` lets you
+build a check that leans on those instead of the tightly-quota'd ones.
 
 Environment variables (`VT_API_KEY`, `ABUSEIPDB_API_KEY`, `SHODAN_API_KEY`,
-`GREYNOISE_API_KEY`, `SPAMHAUS_DQS_KEY`) still work too and take precedence
-over the config file — handy for CI or if you'd rather manage secrets in a
-password manager/secret store than on disk. `config.toml.example` in this
+`GREYNOISE_API_KEY`, `SPAMHAUS_DQS_KEY`, `OTX_API_KEY`, `THREATFOX_API_KEY`,
+`CROWDSEC_API_KEY`) still work too and take precedence over the config file
+— handy for CI or if you'd rather manage secrets in a password
+manager/secret store than on disk. `config.toml.example` in this
 repo is just a template for reference; it holds no real keys and is safe to
 commit.
 
@@ -166,8 +187,9 @@ If you have low-quota keyed sources configured (VirusTotal's free tier is
 to the no-key sources with `--sources`.
 
 All the blocklist/list-based feeds (FireHOL, Talos, CINS Army, Blocklist.de,
-ipsum, Emerging Threats, Tor, VPN/Proxy) are cached under `~/.cache/iprep/`
-(TTLs range from 1h to 24h depending on how often the upstream feed updates)
+ipsum, Emerging Threats, Feodo Tracker, DShield, Binary Defense, Tor,
+VPN/Proxy) are cached under `~/.cache/iprep/` (TTLs range from 1h to 24h
+depending on how often the upstream feed updates)
 so repeated lookups don't re-download multi-MB lists every time. Fetched
 content is sanity-checked before being cached — if an upstream feed starts
 returning an HTML error/bot-challenge page instead of its usual plaintext
@@ -198,17 +220,15 @@ Roughly in order of value if you want to extend this:
    reported" timestamps already surfaced in `details` — worth promoting into
    the headline report (an IP maliciously active yesterday is a different
    story than one whose worst report was 3 years ago).
-2. **AlienVault OTX** — free API key, pulse data (which threat campaigns/IOC
-   lists reference this IP), good complement to VT/AbuseIPDB.
-3. **CIDR/subnet rollup.** If you're investigating an incident, seeing "this
+2. **CIDR/subnet rollup.** If you're investigating an incident, seeing "this
    /24 has 6 other IPs also flagged in the last 90 days" is often more
    actionable than any single-IP verdict. (`iprep batch` gets you partway
    there today if you already have the candidate IP list.)
-4. **Local result caching with a short TTL** (minutes, not hours) so
+3. **Local result caching with a short TTL** (minutes, not hours) so
    re-running `iprep` on the same IP a few times while investigating doesn't
    burn API quota — separate from the long-TTL blocklist cache that already
    exists.
-5. **Full IPv6 parity.** Talos, FireHOL, CINS Army, ipsum, Emerging Threats,
+4. **Full IPv6 parity.** Talos, FireHOL, CINS Army, ipsum, Emerging Threats,
    and the Tor exit list are IPv4-only at the source (confirmed against the
    live feeds) — no fix on `iprep`'s end will close that, short of finding
    IPv6-native replacements for each. Spamhaus, ASN, RDAP, reverse DNS,

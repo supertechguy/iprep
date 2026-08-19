@@ -20,6 +20,9 @@ KEY_SPECS: dict[str, tuple[str, str, str]] = {
     "shodan": ("shodan_api_key", "SHODAN_API_KEY", "shodan"),
     "greynoise": ("greynoise_api_key", "GREYNOISE_API_KEY", "greynoise"),
     "spamhaus_dqs": ("spamhaus_dqs_key", "SPAMHAUS_DQS_KEY", "spamhaus_dqs"),
+    "otx": ("otx_api_key", "OTX_API_KEY", "otx"),
+    "threatfox": ("threatfox_api_key", "THREATFOX_API_KEY", "threatfox"),
+    "crowdsec": ("crowdsec_api_key", "CROWDSEC_API_KEY", "crowdsec"),
 }
 KNOWN_SOURCES = list(KEY_SPECS)
 
@@ -31,6 +34,9 @@ class Config:
     shodan_api_key: str | None = None
     greynoise_api_key: str | None = None
     spamhaus_dqs_key: str | None = None
+    otx_api_key: str | None = None
+    threatfox_api_key: str | None = None
+    crowdsec_api_key: str | None = None
 
 
 def _read_toml_keys() -> dict[str, str]:
