@@ -14,6 +14,10 @@ WEIGHTS = {
     "Spamhaus": 1.0,
     "Talos": 1.0,
     "FireHOL": 0.8,
+    "CINS Army": 0.9,
+    "Blocklist.de": 0.8,
+    "ipsum": 0.8,
+    "Emerging Threats": 0.8,
     "GreyNoise": 0.7,
     "Shodan": 0.5,
 }

@@ -4,10 +4,13 @@ import ipaddress
 
 from ..base import SourceResult
 from ..context import Context
+from ..netutil import ip_version
 
 # FireHOL's own tiered aggregates: level1 is curated for a near-zero false
 # positive rate, level2/3 trade some precision for broader coverage.
 # https://iplists.firehol.org/
+# Confirmed IPv4-only - FireHOL's blocklist-ipsets repo has no IPv6
+# equivalents of these level1-3 aggregates.
 LISTS = {
     "firehol_level1": (
         "https://raw.githubusercontent.com/firehol/blocklist-ipsets/master/firehol_level1.netset",
@@ -39,6 +42,12 @@ def _parse_networks(text: str) -> list[ipaddress._BaseNetwork]:
 
 
 def check(ip: str, ctx: Context) -> SourceResult:
+    if ip_version(ip) == 6:
+        return SourceResult(
+            name="FireHOL", ok=True, verdict="unknown", score=None,
+            summary="FireHOL level1-3 aggregates are IPv4-only; no coverage for this IPv6 address",
+        )
+
     addr = ipaddress.ip_address(ip)
     hits: list[tuple[str, str]] = []
     errors: list[str] = []

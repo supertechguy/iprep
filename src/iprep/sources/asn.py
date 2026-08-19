@@ -4,19 +4,20 @@ import dns.resolver
 
 from ..base import SourceResult
 from ..context import Context
+from ..netutil import dnsbl_query, ip_version
 
 # Team Cymru's free DNS-based ASN lookup service - no key, no rate limit
 # problems in practice. https://team-cymru.com/community-services/ip-asn-mapping/
+# IPv6 uses a separate zone (origin6 instead of origin) but the same
+# nibble-reversed query construction.
 
 
 def check(ip: str, ctx: Context) -> SourceResult:
-    octets = ip.split(".")
-    if len(octets) != 4:
-        return SourceResult(name="ASN", ok=False, error="IPv6 not supported by this check", summary="skipped", category="context")
+    origin_zone = "origin.asn.cymru.com" if ip_version(ip) == 4 else "origin6.asn.cymru.com"
+    query = dnsbl_query(ip, origin_zone)
 
-    rev = ".".join(reversed(octets))
     try:
-        origin_answers = ctx.dns_resolver.resolve(f"{rev}.origin.asn.cymru.com", "TXT")
+        origin_answers = ctx.dns_resolver.resolve(query, "TXT")
     except dns.resolver.NXDOMAIN:
         return SourceResult(name="ASN", ok=True, verdict="unknown", category="context", summary="no ASN/BGP origin found (unannounced or reserved space)")
     except Exception as e:

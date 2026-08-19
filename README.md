@@ -22,19 +22,33 @@ $ iprep 45.142.212.10
 
 ## Sources
 
-| Source | What it gives you | Key required |
-|---|---|---|
-| **VirusTotal** | Multi-engine malicious/suspicious verdicts, reputation score, tags | Yes (free tier) |
-| **AbuseIPDB** | Crowdsourced abuse confidence score, report count, ISP/usage type | Yes (free tier) |
-| **Shodan** | Open ports, banners, known CVEs, risky tags (c2/honeypot/botnet) | Yes (paid-ish) |
-| **Talos** | Membership on the Cisco Talos/Snort curated IP blocklist feed | No |
-| **Spamhaus** | ZEN DNSBL lookup (SBL/XBL/CSS/DROP = abuse; PBL = policy-only, scored lower) | No |
-| **FireHOL** | Membership on `firehol_level1/2/3` aggregate blocklists (CIDR-aware) | No |
-| **GreyNoise** | Internet-scanner vs. targeted-attacker classification, RIOT (known-benign service) tagging | Optional (free tier) |
-| **RDAP/Whois** | Org, network name, country, abuse contact — via `rdap.org` (structured, no legacy whois parsing) | No |
-| **ASN** | Announcing AS number/name and BGP prefix, via Team Cymru's DNS service | No |
-| **Reverse DNS** | PTR record + forward-confirmation | No |
-| **Tor** | Whether the IP is a known Tor exit node | No |
+| Source | What it gives you | Key required | IPv6 |
+|---|---|---|---|
+| **VirusTotal** | Multi-engine malicious/suspicious verdicts, reputation score, tags | Yes (free tier) | Yes |
+| **AbuseIPDB** | Crowdsourced abuse confidence score, report count, ISP/usage type | Yes (free tier) | Yes |
+| **Shodan** | Open ports, banners, known CVEs, risky tags (c2/honeypot/botnet) | Yes (paid-ish) | Yes |
+| **Talos** | Membership on the Cisco Talos/Snort curated IP blocklist feed | No | No (feed is IPv4-only) |
+| **Spamhaus** | ZEN DNSBL lookup (SBL/XBL/CSS/DROP = abuse; PBL = policy-only, scored lower) | No | Yes* |
+| **FireHOL** | Membership on `firehol_level1/2/3` aggregate blocklists (CIDR-aware) | No | No (aggregates are IPv4-only) |
+| **CINS Army** | Membership on the CI Army "bad guys" list (long-established, Snort/Suricata community) | No | No (feed is IPv4-only) |
+| **Blocklist.de** | Crowdsourced fail2ban-style abuse reports (SSH/mail/web bruteforce) | No | Yes |
+| **ipsum** | How many distinct public blocklists (of dozens aggregated) flag this IP | No | No (feed is IPv4-only) |
+| **Emerging Threats** | Membership on Proofpoint/ET's open compromised-hosts feed | No | No (feed is IPv4-only) |
+| **GreyNoise** | Internet-scanner vs. targeted-attacker classification, RIOT (known-benign service) tagging | Optional (free tier) | Unverified |
+| **RDAP/Whois** | Org, network name, country, abuse contact — via `rdap.org` (structured, no legacy whois parsing) | No | Yes |
+| **ASN** | Announcing AS number/name and BGP prefix, via Team Cymru's DNS service | No | Yes |
+| **Reverse DNS** | PTR record + forward-confirmation (AAAA-aware) | No | Yes |
+| **Tor** | Whether the IP is a known Tor exit node | No | No (feed is IPv4-only) |
+| **VPN/Proxy** | Whether the IP is a known commercial VPN exit, or broader datacenter/hosting space | No | Yes |
+
+\* Spamhaus IPv6 ZEN lookups work (verified live) but aren't documented on
+their free public-mirror FAQ the way the IPv4 syntax is — `iprep` flags this
+in the summary so you can weigh it accordingly.
+
+Every source that can't cover an address family reports that plainly
+(`verdict: unknown`, e.g. "FireHOL level1-3 aggregates are IPv4-only")
+instead of silently guessing — a source with no opinion is not the same
+thing as a source that checked and found nothing.
 
 **Why no Talos API integration?** Cisco Talos doesn't publish a public REST
 API — their web reputation lookup is a JS-rendered page not meant for
@@ -42,12 +56,22 @@ scraping. Instead `iprep` uses the same curated IP blocklist feed that
 Snort/Suricata deployments consume, which is Talos-maintained data without
 the scraping fragility.
 
+**Why is VPN/Proxy just informational?** Using a VPN isn't evidence of
+malice by itself (same reasoning as the Tor check) — it's shown so you can
+factor it into your own judgment call, but it doesn't move the aggregate
+score. Detection comes from [X4BNet/lists_vpn](https://github.com/X4BNet/lists_vpn),
+a community-maintained, regularly-updated range list with two tiers: a
+strict "vpn" list (known commercial VPN provider ranges) and a broader
+"datacenter" list (also covers general hosting/cloud/proxy infrastructure —
+useful for "this isn't a residential connection" but plenty of datacenter
+IPs are ordinary cloud servers, not VPN exits).
+
 Reputation sources feed the aggregate score/verdict; context sources
-(RDAP, ASN, reverse DNS, Tor) are shown for enrichment only and don't move
-the needle — they help you interpret *why* something looks the way it does
-(e.g. "malicious per AbuseIPDB, and it's a residential ISP in a country
-you don't do business with" vs. "malicious per AbuseIPDB, but it's inside
-a well-known cloud provider's range").
+(RDAP, ASN, reverse DNS, Tor, VPN/Proxy) are shown for enrichment only and
+don't move the needle — they help you interpret *why* something looks the
+way it does (e.g. "malicious per AbuseIPDB, and it's a residential ISP in a
+country you don't do business with" vs. "malicious per AbuseIPDB, but it's
+inside a well-known cloud provider's range").
 
 ## Install
 
@@ -118,9 +142,15 @@ iprep 1.2.3.4 --refresh-lists       # force re-download of cached blocklists
 iprep keys set virustotal           # add an API key (see "API keys" above)
 ```
 
-FireHOL/Talos/Tor lists are cached under `~/.cache/iprep/` (TTLs: FireHOL 24h,
-Talos 6h, Tor 1h) so repeated lookups don't re-download multi-MB lists every
-time.
+All the blocklist/list-based feeds (FireHOL, Talos, CINS Army, Blocklist.de,
+ipsum, Emerging Threats, Tor, VPN/Proxy) are cached under `~/.cache/iprep/`
+(TTLs range from 1h to 24h depending on how often the upstream feed updates)
+so repeated lookups don't re-download multi-MB lists every time. Fetched
+content is sanity-checked before being cached — if an upstream feed starts
+returning an HTML error/bot-challenge page instead of its usual plaintext
+list, `iprep` treats that as a failed fetch (and falls back to the last good
+cached copy) rather than silently caching garbage and reporting false
+"clean" verdicts.
 
 ## How the verdict is computed
 
@@ -145,40 +175,40 @@ Roughly in order of value if you want to extend this:
    reported" timestamps already surfaced in `details` — worth promoting into
    the headline report (an IP maliciously active yesterday is a different
    story than one whose worst report was 3 years ago).
-2. **Cloud-provider range tagging.** Cross-reference against AWS/GCP/Azure/
-   Cloudflare/DigitalOcean published IP ranges. Traffic from a major cloud
-   provider changes how you weigh everything else (ephemeral attacker
-   infrastructure vs. a CDN edge node) and is a cheap, no-key addition.
-3. **AlienVault OTX** — free API key, pulse data (which threat campaigns/IOC
+2. **AlienVault OTX** — free API key, pulse data (which threat campaigns/IOC
    lists reference this IP), good complement to VT/AbuseIPDB.
-4. **A `batch` mode** reading a file of IPs (e.g. from firewall/IDS logs) and
+3. **A `batch` mode** reading a file of IPs (e.g. from firewall/IDS logs) and
    emitting a CSV/JSON summary — the architecture already supports this
    cleanly since `check(ip, ctx)` is stateless per-IP; you'd just loop and
    reuse one `Context` (and therefore one warm blocklist cache) across all of
    them.
-5. **CIDR/subnet rollup.** If you're investigating an incident, seeing "this
+4. **CIDR/subnet rollup.** If you're investigating an incident, seeing "this
    /24 has 6 other IPs also flagged in the last 90 days" is often more
    actionable than any single-IP verdict.
-6. **Local result caching with a short TTL** (minutes, not hours) so
+5. **Local result caching with a short TTL** (minutes, not hours) so
    re-running `iprep` on the same IP a few times while investigating doesn't
    burn API quota — separate from the long-TTL blocklist cache that already
    exists.
-7. **IPv6 support.** Spamhaus, ASN (Cymru), and Tor sources here are IPv4-only
-   as written; VirusTotal/AbuseIPDB/Shodan/RDAP/FireHOL already handle IPv6
-   fine. Worth closing that gap if you deal with v6 traffic.
+6. **Full IPv6 parity.** Talos, FireHOL, CINS Army, ipsum, Emerging Threats,
+   and the Tor exit list are IPv4-only at the source (confirmed against the
+   live feeds) — no fix on `iprep`'s end will close that, short of finding
+   IPv6-native replacements for each. Spamhaus, ASN, RDAP, reverse DNS,
+   Blocklist.de, and VPN/Proxy detection already fully support IPv6.
 
 ## Project layout
 
 ```
 src/iprep/
   base.py        SourceResult - the normalized shape every source returns
-  config.py      API key loading (env vars + optional TOML config)
-  cache.py       disk cache for the blocklist-style feeds
+  config.py      API key loading/storage (env vars + `iprep keys`-managed TOML config)
+  cache.py       disk cache for the blocklist-style feeds, with fetch validation
+  netutil.py     shared IPv4/IPv6 helpers (version detection, DNSBL query building)
   context.py     shared HTTP session / DNS resolver / cache handed to sources
   aggregate.py   combines all SourceResults into one Verdict
   report.py      rich terminal rendering
   cli.py         argument parsing, parallel dispatch, JSON output
   sources/       one module per source, each exposing check(ip, ctx) -> SourceResult
+    _listutil.py   shared helper for the simple "fetch a plaintext IP list" sources
 ```
 
 Adding a new source is just: write a module with a `check(ip, ctx)` function

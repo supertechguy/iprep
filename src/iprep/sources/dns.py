@@ -5,6 +5,7 @@ import dns.reversename
 
 from ..base import SourceResult
 from ..context import Context
+from ..netutil import ip_version
 
 
 def check(ip: str, ctx: Context) -> SourceResult:
@@ -17,9 +18,10 @@ def check(ip: str, ctx: Context) -> SourceResult:
     except Exception as e:
         return SourceResult(name="Reverse DNS", ok=False, error=str(e), category="context", summary="lookup failed")
 
+    forward_record_type = "AAAA" if ip_version(ip) == 6 else "A"
     forward_confirmed = False
     try:
-        forward = ctx.dns_resolver.resolve(hostname, "A")
+        forward = ctx.dns_resolver.resolve(hostname, forward_record_type)
         forward_confirmed = ip in {str(r) for r in forward}
     except Exception:
         pass

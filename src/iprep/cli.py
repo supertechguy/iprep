@@ -16,7 +16,22 @@ from .aggregate import aggregate
 from .base import SourceResult
 from .config import CONFIG_PATH, KEY_SPECS, KNOWN_SOURCES, key_origin, load_config, mask, save_key
 from .context import build_context
-from .sources import abuseipdb, asn, firehol, greynoise, rdap, shodan, spamhaus, talos, tor
+from .sources import (
+    abuseipdb,
+    asn,
+    blocklistde,
+    cins,
+    et_compromised,
+    firehol,
+    greynoise,
+    ipsum,
+    rdap,
+    shodan,
+    spamhaus,
+    talos,
+    tor,
+    vpn,
+)
 from .sources import dns as dns_source
 from .sources import virustotal
 
@@ -27,10 +42,15 @@ SOURCE_MODULES = {
     "talos": talos,
     "spamhaus": spamhaus,
     "firehol": firehol,
+    "cins": cins,
+    "blocklistde": blocklistde,
+    "ipsum": ipsum,
+    "et": et_compromised,
     "rdap": rdap,
     "asn": asn,
     "dns": dns_source,
     "tor": tor,
+    "vpn": vpn,
     "greynoise": greynoise,
 }
 
@@ -45,7 +65,7 @@ def build_parser() -> argparse.ArgumentParser:
     check_p.add_argument("ip", help="IPv4 (or IPv6, for supported sources) address to check")
     check_p.add_argument("--json", action="store_true", help="output machine-readable JSON instead of a formatted report")
     check_p.add_argument("--sources", help="comma-separated subset of sources to query: " + ",".join(SOURCE_MODULES))
-    check_p.add_argument("--refresh-lists", action="store_true", help="force re-download of cached blocklists (FireHOL/Talos/Tor)")
+    check_p.add_argument("--refresh-lists", action="store_true", help="force re-download of all cached blocklist/list-based feeds")
     check_p.add_argument("--timeout", type=float, default=15.0, help="per-source request timeout in seconds (default 15)")
 
     keys_p = sub.add_parser("keys", help="manage locally-stored API keys (never written to the repo)")

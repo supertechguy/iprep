@@ -4,6 +4,7 @@ import dns.resolver
 
 from ..base import SourceResult
 from ..context import Context
+from ..netutil import dnsbl_query, ip_version
 
 # https://www.spamhaus.org/blocklists/zen-blocklist/  - return codes decoded here
 ZEN_CODES = {
@@ -26,21 +27,22 @@ SETUP_HINT = (
 
 
 def check(ip: str, ctx: Context) -> SourceResult:
-    octets = ip.split(".")
-    if len(octets) != 4:
-        return SourceResult(name="Spamhaus", ok=False, error="IPv6 not supported by this check", summary="skipped")
+    is_v6 = ip_version(ip) == 6
 
     dqs_key = ctx.config.spamhaus_dqs_key
     zone = f"{dqs_key}.zen.dq.spamhaus.net" if dqs_key else "zen.spamhaus.org"
-    query = ".".join(reversed(octets)) + "." + zone
+    query = dnsbl_query(ip, zone)
 
     try:
         answers = ctx.dns_resolver.resolve(query, "A")
         codes = [str(r) for r in answers]
     except dns.resolver.NXDOMAIN:
+        summary = "not listed on Spamhaus ZEN"
+        if is_v6:
+            summary += " (IPv6 ZEN lookups work but aren't officially documented on the free public mirror - treat with slightly less confidence than IPv4)"
         return SourceResult(
             name="Spamhaus", ok=True, verdict="clean", score=0.0,
-            summary="not listed on Spamhaus ZEN", details={"link": "https://check.spamhaus.org/"},
+            summary=summary, details={"link": "https://check.spamhaus.org/"},
         )
     except dns.resolver.NoNameservers:
         return SourceResult(
