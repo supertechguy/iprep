@@ -1,26 +1,23 @@
 #!/usr/bin/env bash
-# Installs iprep. Prefers pipx (isolated, global `iprep` command); falls back
-# to a local .venv/ in this repo if pipx isn't available and can't be set up.
+# Installs iprep globally via pipx (isolated, no venv activation needed).
+# Bootstraps pipx itself if it isn't already on PATH.
 #
 # Usage:
-#   ./install.sh              interactive: offers to set up pipx if missing
-#   ./install.sh --pipx       force the pipx path (fails if pipx unavailable)
-#   ./install.sh --venv       force the local-venv path
-#   ./install.sh --yes        don't prompt; auto-accept installing pipx
+#   ./install.sh              default: installs/uses pipx automatically
+#   ./install.sh --pipx       same, but errors instead of bootstrapping if pipx is missing
+#   ./install.sh --venv       install into a local .venv/ in this repo instead
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODE=""
-ASSUME_YES=""
 
 for arg in "$@"; do
     case "$arg" in
         --pipx) MODE="pipx" ;;
         --venv) MODE="venv" ;;
-        --yes|-y) ASSUME_YES="1" ;;
         -h|--help)
-            sed -n '2,10p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+            sed -n '2,8p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
             exit 0
             ;;
         *)
@@ -62,10 +59,11 @@ install_with_venv() {
     echo "then run 'iprep --help'."
 }
 
-suggest_pipx_install_command() {
-    # Prefer the OS package manager where one exists - many modern distros
-    # (Debian/Ubuntu 23.04+ and derivatives, per PEP 668) refuse `pip install
-    # --user` outside a virtualenv specifically to steer you toward this.
+# Prefer the OS package manager where one exists - many modern distros
+# (Debian/Ubuntu 23.04+ and derivatives, per PEP 668) refuse `pip install
+# --user` outside a virtualenv specifically to steer you toward this, so it's
+# usually the one that actually works.
+pipx_install_command() {
     if command -v apt-get >/dev/null 2>&1; then
         echo "sudo apt-get install -y pipx"
     elif command -v dnf >/dev/null 2>&1; then
@@ -75,22 +73,45 @@ suggest_pipx_install_command() {
     elif command -v brew >/dev/null 2>&1; then
         echo "brew install pipx"
     else
-        echo "python3 -m pip install --user pipx"
+        echo ""
     fi
 }
 
+refresh_path_for_pipx() {
+    python3 -m pipx ensurepath >/dev/null 2>&1 || true
+    # pipx may have just been installed to a user bin dir not yet on this
+    # shell's PATH - add it for the rest of this script run.
+    local user_base
+    user_base="$(python3 -m site --user-base 2>/dev/null || true)"
+    [ -n "$user_base" ] && export PATH="$user_base/bin:$PATH"
+}
+
+# Actually installs pipx (not just prints a suggestion), trying pip first
+# and falling back to the OS package manager. The package-manager path may
+# invoke sudo and prompt for your password.
 try_bootstrap_pipx() {
+    echo "pipx not found - installing it..."
+
     if python3 -m pip install --user -q pipx 2>/dev/null; then
-        python3 -m pipx ensurepath >/dev/null 2>&1 || true
-        # pipx may have just been installed to a user bin dir not yet on this
-        # shell's PATH - add it for the rest of this script run.
-        local user_base
-        user_base="$(python3 -m site --user-base 2>/dev/null || true)"
-        [ -n "$user_base" ] && export PATH="$user_base/bin:$PATH"
+        refresh_path_for_pipx
         command -v pipx >/dev/null 2>&1 && return 0
     fi
-    echo "Could not install pipx via pip (this system likely blocks user-wide pip installs outside a venv - PEP 668)." >&2
-    echo "Install it yourself with:  $(suggest_pipx_install_command)" >&2
+
+    local cmd
+    cmd="$(pipx_install_command)"
+    if [ -n "$cmd" ]; then
+        echo "pip install --user pipx didn't work (likely PEP 668) - trying: $cmd"
+        echo "(you may be prompted for your password)"
+        if $cmd; then
+            refresh_path_for_pipx
+            command -v pipx >/dev/null 2>&1 && return 0
+        fi
+    fi
+
+    echo "Could not install pipx automatically." >&2
+    if [ -n "$cmd" ]; then
+        echo "Install it yourself with:  $cmd" >&2
+    fi
     echo "...then re-run ./install.sh." >&2
     return 1
 }
@@ -100,31 +121,19 @@ if [ "$MODE" = "venv" ]; then
     exit 0
 fi
 
-if [ "$MODE" = "pipx" ]; then
-    if ! command -v pipx >/dev/null 2>&1; then
-        echo "error: pipx not found on PATH" >&2
-        exit 1
-    fi
-    install_with_pipx
-    exit 0
-fi
-
-# No mode forced: prefer pipx, offering to install it if missing.
 if command -v pipx >/dev/null 2>&1; then
     install_with_pipx
     exit 0
 fi
 
-echo "pipx not found (it gives you a global 'iprep' command in its own isolated environment)."
-
-SHOULD_TRY_PIPX="$ASSUME_YES"
-if [ -z "$SHOULD_TRY_PIPX" ] && [ -t 0 ]; then
-    read -r -p "Install pipx now and use it? [Y/n] " REPLY
-    REPLY="${REPLY:-Y}"
-    [[ "$REPLY" =~ ^[Yy] ]] && SHOULD_TRY_PIPX="1"
+if [ "$MODE" = "pipx" ]; then
+    echo "error: pipx not found on PATH" >&2
+    exit 1
 fi
 
-if [ -n "$SHOULD_TRY_PIPX" ] && try_bootstrap_pipx; then
+# Default: bootstrap pipx automatically, falling back to a local venv only
+# if that's genuinely not possible on this system.
+if try_bootstrap_pipx; then
     install_with_pipx
     exit 0
 fi

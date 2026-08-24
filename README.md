@@ -91,14 +91,16 @@ inside a well-known cloud provider's range").
 ./install.sh
 ```
 
-By default this installs `iprep` globally via [pipx](https://pipx.pypa.io/)
-(isolated from your system Python, `iprep` ends up on your `PATH`), offering
-to install pipx first if you don't have it. Flags:
+This installs `iprep` globally via [pipx](https://pipx.pypa.io/) (isolated
+from your system Python, `iprep` ends up on your `PATH` with no venv to
+activate). If pipx isn't already on your system, the script installs it too
+— pip first, falling back to your OS package manager (`apt`/`dnf`/`pacman`/
+`brew`) if pip refuses (common on modern Debian/Ubuntu, which blocks
+`pip install --user` outside a venv). Flags:
 
-- `./install.sh --pipx` — force the pipx path (errors if pipx isn't present)
+- `./install.sh --pipx` — same, but errors instead of bootstrapping if pipx is missing
 - `./install.sh --venv` — install into a local `.venv/` in this repo instead
   (you'll `source .venv/bin/activate` before running `iprep`)
-- `./install.sh --yes` — non-interactive; auto-accepts installing pipx if missing
 
 Or do it by hand:
 
