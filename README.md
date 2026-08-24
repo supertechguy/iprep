@@ -27,7 +27,7 @@ $ iprep 45.142.212.10
 | **VirusTotal** | Multi-engine malicious/suspicious verdicts, reputation score, tags | Yes (free tier) | Yes |
 | **AbuseIPDB** | Crowdsourced abuse confidence score, report count, ISP/usage type | Yes (free tier) | Yes |
 | **Shodan** | Open ports, banners, known CVEs, risky tags (c2/honeypot/botnet) | Yes (paid-ish) | Yes |
-| **Talos** | Membership on the Cisco Talos/Snort curated IP blocklist feed | No | No (feed is IPv4-only) |
+| **Talos** | Membership on the Cisco Talos/Snort curated IP blocklist feed | Yes (a browser session cookie, not an API key — see below) | No (feed is IPv4-only) |
 | **Spamhaus** | ZEN DNSBL lookup (SBL/XBL/CSS/DROP = abuse; PBL = policy-only, scored lower) | No | Yes* |
 | **FireHOL** | Membership on `firehol_level1/2/3` aggregate blocklists (CIDR-aware) | No | No (aggregates are IPv4-only) |
 | **CINS Army** | Membership on the CI Army "bad guys" list (long-established, Snort/Suricata community) | No | No (feed is IPv4-only) |
@@ -62,11 +62,21 @@ Every source that can't cover an address family reports that plainly
 instead of silently guessing — a source with no opinion is not the same
 thing as a source that checked and found nothing.
 
-**Why no Talos API integration?** Cisco Talos doesn't publish a public REST
+**Why does Talos need a cookie?** Cisco Talos doesn't publish a public REST
 API — their web reputation lookup is a JS-rendered page not meant for
-scraping. Instead `iprep` uses the same curated IP blocklist feed that
-Snort/Suricata deployments consume, which is Talos-maintained data without
-the scraping fragility.
+scraping. `iprep` instead uses Snort's "Sample IP Block List" feed, the same
+data Snort/Suricata deployments pull — but as of a September 2024 change,
+Snort gates that download behind a sign-in + click-to-accept terms page, and
+there's no oinkcode/API-key mechanism for it (oinkcodes are only for
+authenticated Snort rule-package downloads). The only way to fetch it
+programmatically is with a real browser session cookie: sign in and accept
+the terms at https://snort.org/downloads/ip-block-list, copy that page
+request's `Cookie` header from your browser's devtools, then
+`iprep keys set talos`. It'll periodically expire and need refreshing —
+without one configured, this source just reports why it can't run rather
+than silently failing. Worth knowing either way: even before the gate went
+up, this was documented as a "Sample" list — under 1% of Talos's actual
+internal blocklist.
 
 **Why is VPN/Proxy just informational?** Using a VPN isn't evidence of
 malice by itself (same reasoning as the Tor check) — it's shown so you can
@@ -141,6 +151,7 @@ Sign up for keys here:
 - `otx` — https://otx.alienvault.com/ (optional — OTX already works with no key; a free key just raises the rate limit)
 - `threatfox` — https://auth.abuse.ch/ (free, instant signup via GitHub/Google/etc, no approval wait)
 - `crowdsec` — https://app.crowdsec.net (free, 120 lookups/month)
+- `talos` — not a signup, a browser session cookie (see "Why does Talos need a cookie?" above); expires periodically and needs refreshing by hand
 
 If VirusTotal's free tier (500/day, 4/min) is too tight for how often you
 check IPs, most of the sources above need no key at all, and OTX/ThreatFox
@@ -149,7 +160,7 @@ build a check that leans on those instead of the tightly-quota'd ones.
 
 Environment variables (`VT_API_KEY`, `ABUSEIPDB_API_KEY`, `SHODAN_API_KEY`,
 `GREYNOISE_API_KEY`, `SPAMHAUS_DQS_KEY`, `OTX_API_KEY`, `THREATFOX_API_KEY`,
-`CROWDSEC_API_KEY`) still work too and take precedence over the config file
+`CROWDSEC_API_KEY`, `TALOS_COOKIE`) still work too and take precedence over the config file
 — handy for CI or if you'd rather manage secrets in a password
 manager/secret store than on disk. `config.toml.example` in this
 repo is just a template for reference; it holds no real keys and is safe to

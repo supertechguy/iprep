@@ -50,6 +50,7 @@ class Cache:
         ttl_seconds: int,
         session: requests.Session,
         validate: Callable[[str], bool] = looks_like_plaintext_list,
+        headers: dict[str, str] | None = None,
     ) -> str:
         path = self.cache_dir / name
         if not self.force_refresh and path.exists():
@@ -57,7 +58,7 @@ class Cache:
             if age < ttl_seconds:
                 return path.read_text()
         try:
-            resp = session.get(url, timeout=30)
+            resp = session.get(url, timeout=30, headers=headers)
             resp.raise_for_status()
             if not validate(resp.text):
                 raise BadFeedContent(f"fetched content from {url} doesn't look like the expected list (possibly blocked/challenged)")
