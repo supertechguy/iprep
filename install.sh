@@ -62,15 +62,37 @@ install_with_venv() {
     echo "then run 'iprep --help'."
 }
 
+suggest_pipx_install_command() {
+    # Prefer the OS package manager where one exists - many modern distros
+    # (Debian/Ubuntu 23.04+ and derivatives, per PEP 668) refuse `pip install
+    # --user` outside a virtualenv specifically to steer you toward this.
+    if command -v apt-get >/dev/null 2>&1; then
+        echo "sudo apt-get install -y pipx"
+    elif command -v dnf >/dev/null 2>&1; then
+        echo "sudo dnf install -y pipx"
+    elif command -v pacman >/dev/null 2>&1; then
+        echo "sudo pacman -S --noconfirm python-pipx"
+    elif command -v brew >/dev/null 2>&1; then
+        echo "brew install pipx"
+    else
+        echo "python3 -m pip install --user pipx"
+    fi
+}
+
 try_bootstrap_pipx() {
-    python3 -m pip install --user -q pipx 2>/dev/null || return 1
-    python3 -m pipx ensurepath >/dev/null 2>&1 || true
-    # pipx may have just been installed to a user bin dir not yet on this
-    # shell's PATH - add it for the rest of this script run.
-    local user_base
-    user_base="$(python3 -m site --user-base 2>/dev/null || true)"
-    [ -n "$user_base" ] && export PATH="$user_base/bin:$PATH"
-    command -v pipx >/dev/null 2>&1
+    if python3 -m pip install --user -q pipx 2>/dev/null; then
+        python3 -m pipx ensurepath >/dev/null 2>&1 || true
+        # pipx may have just been installed to a user bin dir not yet on this
+        # shell's PATH - add it for the rest of this script run.
+        local user_base
+        user_base="$(python3 -m site --user-base 2>/dev/null || true)"
+        [ -n "$user_base" ] && export PATH="$user_base/bin:$PATH"
+        command -v pipx >/dev/null 2>&1 && return 0
+    fi
+    echo "Could not install pipx via pip (this system likely blocks user-wide pip installs outside a venv - PEP 668)." >&2
+    echo "Install it yourself with:  $(suggest_pipx_install_command)" >&2
+    echo "...then re-run ./install.sh." >&2
+    return 1
 }
 
 if [ "$MODE" = "venv" ]; then
