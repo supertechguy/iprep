@@ -1,7 +1,7 @@
 [project]
 name = "iprep"
 version = "0.1.0"
-description = "CLI tool to aggregate IP reputation across VirusTotal, AbuseIPDB, Shodan, Talos, Spamhaus, FireHOL, RDAP, ASN, DNS, Tor, and GreyNoise."
+description = "CLI tool aggregating IP reputation and enrichment across 20+ free and paid threat-intel sources."
 requires-python = ">=3.11"
 dependencies = [
     "requests>=2.31",

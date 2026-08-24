@@ -32,10 +32,11 @@ def looks_like_plaintext_list(text: str) -> bool:
 class Cache:
     """Simple file-backed cache for the blocklist/list-based sources.
 
-    These feeds (FireHOL, Talos, Tor exit list, etc.) are large static text
-    files published for anyone to pull. Re-downloading them on every single
-    `iprep` invocation would be slow and impolite, so we cache to disk with a
-    TTL and fall back to a stale copy if a refresh fails or fails validation.
+    These feeds (FireHOL, Feodo Tracker, Tor exit list, etc.) are large
+    static text files published for anyone to pull. Re-downloading them on
+    every single `iprep` invocation would be slow and impolite, so we cache
+    to disk with a TTL and fall back to a stale copy if a refresh fails or
+    fails validation.
     """
 
     def __init__(self, cache_dir: Path = CACHE_DIR, force_refresh: bool = False):
@@ -50,7 +51,6 @@ class Cache:
         ttl_seconds: int,
         session: requests.Session,
         validate: Callable[[str], bool] = looks_like_plaintext_list,
-        headers: dict[str, str] | None = None,
     ) -> str:
         path = self.cache_dir / name
         if not self.force_refresh and path.exists():
@@ -58,7 +58,7 @@ class Cache:
             if age < ttl_seconds:
                 return path.read_text()
         try:
-            resp = session.get(url, timeout=30, headers=headers)
+            resp = session.get(url, timeout=30)
             resp.raise_for_status()
             if not validate(resp.text):
                 raise BadFeedContent(f"fetched content from {url} doesn't look like the expected list (possibly blocked/challenged)")

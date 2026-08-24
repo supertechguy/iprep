@@ -23,7 +23,6 @@ KEY_SPECS: dict[str, tuple[str, str, str]] = {
     "otx": ("otx_api_key", "OTX_API_KEY", "otx"),
     "threatfox": ("threatfox_api_key", "THREATFOX_API_KEY", "threatfox"),
     "crowdsec": ("crowdsec_api_key", "CROWDSEC_API_KEY", "crowdsec"),
-    "talos": ("talos_cookie", "TALOS_COOKIE", "talos"),
 }
 KNOWN_SOURCES = list(KEY_SPECS)
 
@@ -38,7 +37,6 @@ class Config:
     otx_api_key: str | None = None
     threatfox_api_key: str | None = None
     crowdsec_api_key: str | None = None
-    talos_cookie: str | None = None
 
 
 def _read_toml_keys() -> dict[str, str]:

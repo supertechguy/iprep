@@ -5,14 +5,13 @@ from dataclasses import dataclass
 from .base import SourceResult
 
 # Relative confidence weighting for the sources that contribute to the score.
-# Direct blocklist/DNSBL hits (Spamhaus, Talos) and the two big multi-engine
-# reputation APIs are weighted highest; Shodan and GreyNoise are softer,
-# context-flavored signals so they count for less.
+# Direct blocklist/DNSBL hits (Spamhaus, Feodo Tracker) and the two big
+# multi-engine reputation APIs are weighted highest; Shodan and GreyNoise are
+# softer, context-flavored signals so they count for less.
 WEIGHTS = {
     "VirusTotal": 1.0,
     "AbuseIPDB": 1.0,
     "Spamhaus": 1.0,
-    "Talos": 1.0,
     "Feodo Tracker": 1.0,
     "FireHOL": 0.8,
     "CINS Army": 0.9,
