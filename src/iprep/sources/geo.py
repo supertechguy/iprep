@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:  # pragma: no cover
+    ZoneInfo = None
+
 import requests
 
 from ..base import SourceResult
@@ -15,6 +22,21 @@ GEO_URL = "https://ipwho.is/{ip}"
 
 def _location(d: dict) -> str:
     return ", ".join(b for b in (d.get("city"), d.get("region"), d.get("country")) if b) or "location unknown"
+
+
+def _local_time(tz_id: str | None) -> tuple[str | None, bool | None]:
+    """(human 'HH:MM Ddd' at the IP's location, is-it-outside-business-hours).
+
+    Weak signal on its own, but "this IP was hammering you at 4am its local
+    time" is a small tell worth surfacing next to the geolocation."""
+    if not tz_id or ZoneInfo is None:
+        return None, None
+    try:
+        now = datetime.now(timezone.utc).astimezone(ZoneInfo(tz_id))
+    except Exception:
+        return None, None
+    off_hours = now.weekday() >= 5 or not (8 <= now.hour < 18)
+    return now.strftime("%H:%M %a"), off_hours
 
 
 def _fail(error: str, summary: str) -> SourceResult:
@@ -42,6 +64,7 @@ def check(ip: str, ctx: Context) -> SourceResult:
     country_code = (d.get("country_code") or "").upper()
     conn = d.get("connection") or {}
     home = (ctx.config.home_country or "").upper()
+    tz_id = (d.get("timezone") or {}).get("id")
 
     is_local = None
     tag = ""
@@ -53,12 +76,17 @@ def check(ip: str, ctx: Context) -> SourceResult:
             else f" — FOREIGN (home country is {home})"
         )
 
+    local_time, off_hours = _local_time(tz_id)
+    time_str = ""
+    if local_time:
+        time_str = f"; {local_time} there" + (" (off-hours)" if off_hours else "")
+
     return SourceResult(
         name="Geolocation",
         ok=True,
         verdict="unknown",
         category="context",
-        summary=f"{_location(d)}{tag}",
+        summary=f"{_location(d)}{tag}{time_str}",
         details={
             "country": d.get("country"),
             "country_code": country_code or None,
@@ -69,7 +97,9 @@ def check(ip: str, ctx: Context) -> SourceResult:
             "longitude": d.get("longitude"),
             "continent": d.get("continent"),
             "is_eu": d.get("is_eu"),
-            "timezone": (d.get("timezone") or {}).get("id"),
+            "timezone": tz_id,
+            "local_time": local_time,
+            "off_hours": off_hours,
             "asn": conn.get("asn"),
             "org": conn.get("org"),
             "isp": conn.get("isp"),

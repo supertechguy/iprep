@@ -43,14 +43,14 @@ $ iprep 45.142.212.10
 | **ThreatFox** | abuse.ch malware IOC match — malware family, threat type, confidence level | Yes (free, instant signup) | Unverified |
 | **CrowdSec CTI** | Crowd-sourced reputation/confidence/behaviors from CrowdSec's sensor network | Yes (free, 120 lookups/month) | Unverified |
 | **GreyNoise** | Internet-scanner vs. targeted-attacker classification, RIOT (known-benign service) tagging | Optional (free tier) | Unverified |
-| **Geolocation** | Country/region/city, lat-lon, timezone, and (if you set a home country) a LOCAL vs FOREIGN tag — via `ipwho.is` | No | Yes |
+| **Geolocation** | Country/region/city, lat-lon, current local time / off-hours, and (if you set a home country) a LOCAL vs FOREIGN tag — via `ipwho.is` | No | Yes |
 | **RDAP/Whois** | Org, network name, country, abuse contact — via `rdap.org` (structured, no legacy whois parsing) | No | Yes |
 | **ASN** | Announcing AS number/name and BGP prefix, via Team Cymru's DNS service; flags likely anycast (prefix announced from multiple ASes) | No | Yes |
 | **Cloud** | Cloud-provider + region attribution (AWS/GCP/Oracle/DigitalOcean/Cloudflare via published prefix lists; Azure/Hetzner/OVH/Linode/Vultr/… via origin ASN) | No | Yes |
 | **RPKI** | Route-origin validation of the IP's BGP announcement (valid / invalid / unknown) via RIPEstat — an invalid route can mean a hijack or leak | No | Yes (via ASN) |
 | **Passive DNS** | Domains that have historically resolved to this IP, with first/last-seen (via OTX) | No | Yes |
 | **Reverse IP** | How many domains currently resolve to this IP — dedicated host vs. shared hosting / multi-tenant (via HackerTarget) | No | IPv4 |
-| **Reverse DNS** | PTR record + forward-confirmation (AAAA-aware) | No | Yes |
+| **Reverse DNS** | PTR record + forward-confirmation (AAAA-aware), plus a hostname-shape guess (dynamic/residential vs. static/server vs. cloud vs. CDN vs. mail) | No | Yes |
 | **Tor** | Whether the IP is a known Tor exit node | No | No (feed is IPv4-only) |
 | **VPN/Proxy** | Whether the IP is a known commercial VPN exit, or broader datacenter/hosting space | No | Yes |
 
