@@ -27,7 +27,9 @@ $ iprep 45.142.212.10
 | **VirusTotal** | Multi-engine malicious/suspicious verdicts, reputation score, tags | Yes (free tier) | Yes |
 | **AbuseIPDB** | Crowdsourced abuse confidence score, report count, ISP/usage type | Yes (free tier) | Yes |
 | **Shodan** | Open ports, fingerprinted services/versions, known CVEs (with CVSS/verified status), SSL cert notes, risky tags | Yes (paid-ish) | Yes |
+| **InternetDB** | The free, keyless slice of Shodan: open ports, known CVEs, tags, hostnames (no banners/timestamps) | No | Yes |
 | **Spamhaus** | ZEN DNSBL lookup (SBL/XBL/CSS/DROP = abuse; PBL = policy-only, scored lower) | No | Yes* |
+| **Spamhaus ASN-DROP** | Whether the announcing AS is wholly hijacked / bulletproof-hosting (the entire network is disreputable) | No | Yes (via ASN) |
 | **FireHOL** | Membership on `firehol_level1/2/3` aggregate blocklists (CIDR-aware) | No | No (aggregates are IPv4-only) |
 | **CINS Army** | Membership on the CI Army "bad guys" list (long-established, Snort/Suricata community) | No | No (feed is IPv4-only) |
 | **Blocklist.de** | Crowdsourced fail2ban-style abuse reports (SSH/mail/web bruteforce) | No | Yes |
@@ -43,7 +45,9 @@ $ iprep 45.142.212.10
 | **GreyNoise** | Internet-scanner vs. targeted-attacker classification, RIOT (known-benign service) tagging | Optional (free tier) | Unverified |
 | **Geolocation** | Country/region/city, lat-lon, timezone, and (if you set a home country) a LOCAL vs FOREIGN tag — via `ipwho.is` | No | Yes |
 | **RDAP/Whois** | Org, network name, country, abuse contact — via `rdap.org` (structured, no legacy whois parsing) | No | Yes |
-| **ASN** | Announcing AS number/name and BGP prefix, via Team Cymru's DNS service | No | Yes |
+| **ASN** | Announcing AS number/name and BGP prefix, via Team Cymru's DNS service; flags likely anycast (prefix announced from multiple ASes) | No | Yes |
+| **Cloud** | Cloud-provider + region attribution (AWS/GCP/Oracle/DigitalOcean/Cloudflare via published prefix lists; Azure/Hetzner/OVH/Linode/Vultr/… via origin ASN) | No | Yes |
+| **Reverse IP** | How many domains currently resolve to this IP — dedicated host vs. shared hosting / multi-tenant (via HackerTarget) | No | IPv4 |
 | **Reverse DNS** | PTR record + forward-confirmation (AAAA-aware) | No | Yes |
 | **Tor** | Whether the IP is a known Tor exit node | No | No (feed is IPv4-only) |
 | **VPN/Proxy** | Whether the IP is a known commercial VPN exit, or broader datacenter/hosting space | No | Yes |
@@ -95,8 +99,8 @@ approximate — accurate to the country level, rough-to-wrong at the city
 level, and defeated by VPNs/proxies (cross-check the VPN/Proxy row).
 
 Reputation sources feed the aggregate score/verdict; context sources
-(Geolocation, RDAP, ASN, reverse DNS, Tor, VPN/Proxy) are shown for
-enrichment only and don't move the needle — they help you interpret *why* something looks the
+(Geolocation, RDAP, ASN, Cloud, Reverse IP, InternetDB, reverse DNS, Tor,
+VPN/Proxy) are shown for enrichment only and don't move the needle — they help you interpret *why* something looks the
 way it does (e.g. "malicious per AbuseIPDB, and it's a residential ISP in a
 country you don't do business with" vs. "malicious per AbuseIPDB, but it's
 inside a well-known cloud provider's range").

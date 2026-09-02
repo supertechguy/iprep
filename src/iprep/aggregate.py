@@ -19,6 +19,7 @@ WEIGHTS = {
     "ipsum": 0.8,
     "Emerging Threats": 0.8,
     "ThreatFox": 0.9,
+    "Spamhaus ASN-DROP": 0.9,
     "Binary Defense": 0.8,
     "Barracuda RBL": 0.8,
     "CrowdSec CTI": 0.8,
