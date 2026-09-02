@@ -41,6 +41,7 @@ $ iprep 45.142.212.10
 | **ThreatFox** | abuse.ch malware IOC match — malware family, threat type, confidence level | Yes (free, instant signup) | Unverified |
 | **CrowdSec CTI** | Crowd-sourced reputation/confidence/behaviors from CrowdSec's sensor network | Yes (free, 120 lookups/month) | Unverified |
 | **GreyNoise** | Internet-scanner vs. targeted-attacker classification, RIOT (known-benign service) tagging | Optional (free tier) | Unverified |
+| **Geolocation** | Country/region/city, lat-lon, timezone, and (if you set a home country) a LOCAL vs FOREIGN tag — via `ipwho.is` | No | Yes |
 | **RDAP/Whois** | Org, network name, country, abuse contact — via `rdap.org` (structured, no legacy whois parsing) | No | Yes |
 | **ASN** | Announcing AS number/name and BGP prefix, via Team Cymru's DNS service | No | Yes |
 | **Reverse DNS** | PTR record + forward-confirmation (AAAA-aware) | No | Yes |
@@ -82,9 +83,20 @@ strict "vpn" list (known commercial VPN provider ranges) and a broader
 useful for "this isn't a residential connection" but plenty of datacenter
 IPs are ordinary cloud servers, not VPN exits).
 
+**Why is Geolocation just informational?** Where an IP is has no bearing on
+whether it's been used maliciously — a bad actor can be next door and a clean
+host can be on the other side of the planet — so the country/city never moves
+the aggregate score. It's there to help you triage: set your home country
+(`iprep config set home-country US`, or `IPREP_HOME_COUNTRY=US`, or
+`--home-country US` per run) and each looked-up IP is tagged **LOCAL** (same
+country) or **FOREIGN**, which is often the fastest first cut on "is this
+traffic even from somewhere we do business?". IP geolocation is
+approximate — accurate to the country level, rough-to-wrong at the city
+level, and defeated by VPNs/proxies (cross-check the VPN/Proxy row).
+
 Reputation sources feed the aggregate score/verdict; context sources
-(RDAP, ASN, reverse DNS, Tor, VPN/Proxy) are shown for enrichment only and
-don't move the needle — they help you interpret *why* something looks the
+(Geolocation, RDAP, ASN, reverse DNS, Tor, VPN/Proxy) are shown for
+enrichment only and don't move the needle — they help you interpret *why* something looks the
 way it does (e.g. "malicious per AbuseIPDB, and it's a residential ISP in a
 country you don't do business with" vs. "malicious per AbuseIPDB, but it's
 inside a well-known cloud provider's range").
@@ -159,6 +171,22 @@ manager/secret store than on disk. `config.toml.example` in this
 repo is just a template for reference; it holds no real keys and is safe to
 commit.
 
+## Non-secret settings
+
+`iprep config` manages non-secret preferences, stored in the `[settings]`
+table of the same `~/.config/iprep/config.toml`:
+
+```bash
+iprep config set home-country US    # ISO 3166-1 alpha-2 code of where "we" are
+iprep config show                   # list settings and where each value comes from
+iprep config unset home-country
+```
+
+- **`home-country`** — when set, the Geolocation source tags each looked-up IP
+  as `LOCAL` (same country) or `FOREIGN`. Also settable via the
+  `IPREP_HOME_COUNTRY` env var (which wins over the file) or per-run with
+  `--home-country`.
+
 ## Usage
 
 ```bash
@@ -166,6 +194,7 @@ iprep 1.2.3.4                       # full report (shorthand for `iprep check 1.
 iprep 1.2.3.4 --json                # machine-readable output for scripting
 iprep 1.2.3.4 --sources virustotal,abuseipdb,spamhaus   # only query specific sources
 iprep 1.2.3.4 --refresh-lists       # force re-download of cached blocklists
+iprep 1.2.3.4 --home-country US     # tag the Geolocation row LOCAL or FOREIGN
 iprep keys set virustotal           # add an API key (see "API keys" above)
 ```
 
@@ -246,7 +275,7 @@ Roughly in order of value if you want to extend this:
 ```
 src/iprep/
   base.py        SourceResult - the normalized shape every source returns
-  config.py      API key loading/storage (env vars + `iprep keys`-managed TOML config)
+  config.py      API key + settings loading/storage (env vars + `iprep keys`/`iprep config`-managed TOML)
   cache.py       disk cache for the blocklist-style feeds, with fetch validation
   netutil.py     shared IPv4/IPv6 helpers (version detection, DNSBL query building)
   context.py     shared HTTP session / DNS resolver / cache handed to sources

@@ -1,10 +1,11 @@
-# Reference only - prefer `iprep keys set <source>` to manage the real file,
-# which lives at ~/.config/iprep/config.toml (owner-only permissions) and is
-# never part of this repo.
+# Reference only - prefer `iprep keys set <source>` (secrets) and
+# `iprep config set <name> <value>` (settings) to manage the real file, which
+# lives at ~/.config/iprep/config.toml (owner-only permissions) and is never
+# part of this repo.
 #
 # Env vars (VT_API_KEY, ABUSEIPDB_API_KEY, SHODAN_API_KEY, GREYNOISE_API_KEY,
-# SPAMHAUS_DQS_KEY, OTX_API_KEY, THREATFOX_API_KEY, CROWDSEC_API_KEY) always
-# take precedence over the config file if both are set.
+# SPAMHAUS_DQS_KEY, OTX_API_KEY, THREATFOX_API_KEY, CROWDSEC_API_KEY,
+# IPREP_HOME_COUNTRY) always take precedence over the config file if both are set.
 
 [keys]
 virustotal = ""
@@ -15,3 +16,9 @@ spamhaus_dqs = ""
 otx = ""
 threatfox = ""
 crowdsec = ""
+
+[settings]
+# ISO 3166-1 alpha-2 code of your location. When set, the Geolocation source
+# tags each looked-up IP as LOCAL (same country) or FOREIGN. Leave blank to
+# just report the location without tagging.
+home_country = ""

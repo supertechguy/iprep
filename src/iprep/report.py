@@ -41,7 +41,12 @@ def render(ip: str, results: list[SourceResult], verdict: Verdict, console: Cons
     ctx_table.add_column("Source")
     ctx_table.add_column("Info")
     for r in sorted((x for x in results if x.category == "context"), key=lambda x: x.name):
-        info = r.summary if r.ok else f"[dim]{r.error}[/dim]"
+        if not r.ok:
+            info = f"[dim]{r.error}[/dim]"
+        elif r.name == "Geolocation":
+            info = r.summary.replace("FOREIGN", "[bold yellow]FOREIGN[/bold yellow]").replace("LOCAL", "[green]LOCAL[/green]")
+        else:
+            info = r.summary
         ctx_table.add_row(r.name, info)
     console.print(ctx_table)
 

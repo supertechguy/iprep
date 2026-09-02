@@ -16,7 +16,19 @@ from rich.table import Table
 from . import report
 from .aggregate import Verdict, aggregate
 from .base import SourceResult
-from .config import CONFIG_PATH, KEY_SPECS, KNOWN_SOURCES, key_origin, load_config, mask, save_key
+from .config import (
+    CONFIG_PATH,
+    KEY_SPECS,
+    KNOWN_SETTINGS,
+    KNOWN_SOURCES,
+    SETTING_SPECS,
+    key_origin,
+    load_config,
+    mask,
+    save_key,
+    save_setting,
+    setting_origin,
+)
 from .context import Context, build_context
 from .sources import (
     abuseipdb,
@@ -30,6 +42,7 @@ from .sources import (
     et_compromised,
     feodotracker,
     firehol,
+    geo,
     greynoise,
     ipsum,
     otx,
@@ -62,6 +75,7 @@ SOURCE_MODULES = {
     "crowdsec": crowdsec,
     "rdap": rdap,
     "asn": asn,
+    "geo": geo,
     "dns": dns_source,
     "tor": tor,
     "vpn": vpn,
@@ -81,6 +95,7 @@ def build_parser() -> argparse.ArgumentParser:
     check_p.add_argument("--sources", help="comma-separated subset of sources to query: " + ",".join(SOURCE_MODULES))
     check_p.add_argument("--refresh-lists", action="store_true", help="force re-download of all cached blocklist/list-based feeds")
     check_p.add_argument("--timeout", type=float, default=15.0, help="per-source request timeout in seconds (default 15)")
+    check_p.add_argument("--home-country", metavar="CC", help="ISO 3166-1 alpha-2 code of your location; tags the geolocated IP as LOCAL or FOREIGN (overrides the `iprep config` / IPREP_HOME_COUNTRY setting)")
 
     batch_p = sub.add_parser("batch", help="check every IP in a file and emit a summary")
     batch_p.add_argument("file", help="path to a file with one IP per line ('-' for stdin); blank lines and '#' comments are skipped, duplicates are deduped")
@@ -92,6 +107,7 @@ def build_parser() -> argparse.ArgumentParser:
     batch_p.add_argument("--refresh-lists", action="store_true", help="force re-download of all cached blocklist/list-based feeds")
     batch_p.add_argument("--timeout", type=float, default=15.0, help="per-source request timeout in seconds (default 15)")
     batch_p.add_argument("--parallel", type=int, default=4, help="how many IPs to check concurrently (default 4; keep this low if you have low-quota API keys configured)")
+    batch_p.add_argument("--home-country", metavar="CC", help="ISO 3166-1 alpha-2 code of your location; tags each geolocated IP as LOCAL or FOREIGN (overrides the `iprep config` / IPREP_HOME_COUNTRY setting)")
 
     keys_p = sub.add_parser("keys", help="manage locally-stored API keys (never written to the repo)")
     keys_sub = keys_p.add_subparsers(dest="keys_command", required=True)
@@ -106,13 +122,25 @@ def build_parser() -> argparse.ArgumentParser:
     keys_sub.add_parser("show", help="list which keys are configured (values are masked)")
     keys_sub.add_parser("path", help="print the path to the key storage file")
 
+    config_p = sub.add_parser("config", help="view or change non-secret settings (e.g. your home country for LOCAL/FOREIGN geolocation tagging)")
+    config_sub = config_p.add_subparsers(dest="config_command", required=True)
+
+    cset_p = config_sub.add_parser("set", help="set a setting")
+    cset_p.add_argument("name", choices=KNOWN_SETTINGS)
+    cset_p.add_argument("value")
+
+    cunset_p = config_sub.add_parser("unset", help="clear a setting")
+    cunset_p.add_argument("name", choices=KNOWN_SETTINGS)
+
+    config_sub.add_parser("show", help="list current settings and where each value comes from")
+
     return p
 
 
 def _normalize_argv(argv: list[str] | None) -> list[str]:
     """Let `iprep <ip>` keep working as shorthand for `iprep check <ip>`."""
     argv = list(argv if argv is not None else sys.argv[1:])
-    if not argv or argv[0] in ("check", "batch", "keys", "-h", "--help"):
+    if not argv or argv[0] in ("check", "batch", "keys", "config", "-h", "--help"):
         return argv
     return ["check", *argv]
 
@@ -180,6 +208,40 @@ def handle_keys(args: argparse.Namespace, console: Console) -> int:
     return 2
 
 
+def handle_config(args: argparse.Namespace, console: Console) -> int:
+    if args.config_command == "show":
+        config = load_config()
+        table = Table(title=f"iprep settings  ({CONFIG_PATH})")
+        table.add_column("Setting")
+        table.add_column("Value")
+        for name in KNOWN_SETTINGS:
+            field_name, _, _ = SETTING_SPECS[name]
+            value = getattr(config, field_name)
+            if not value:
+                status = "[dim]not set[/dim]"
+            else:
+                status = f"[green]{value}[/green] (from {setting_origin(name) or '?'})"
+            table.add_row(name, status)
+        console.print(table)
+        return 0
+
+    if args.config_command == "set":
+        value = args.value.strip()
+        if not value:
+            console.print("[bold red]error:[/bold red] empty value, nothing saved")
+            return 2
+        save_setting(args.name, value)
+        console.print(f"[green]saved[/green] {args.name} = {value} to {CONFIG_PATH}")
+        return 0
+
+    if args.config_command == "unset":
+        save_setting(args.name, None)
+        console.print(f"[green]cleared[/green] {args.name} from {CONFIG_PATH}")
+        return 0
+
+    return 2
+
+
 def handle_check(args: argparse.Namespace, console: Console) -> int:
     try:
         ipaddress.ip_address(args.ip)
@@ -192,6 +254,8 @@ def handle_check(args: argparse.Namespace, console: Console) -> int:
         return 2
 
     config = load_config()
+    if args.home_country:
+        config.home_country = args.home_country.strip().upper()
     ctx = build_context(config, force_refresh=args.refresh_lists, timeout=args.timeout)
     results, verdict = run_checks(args.ip, ctx, selected)
 
@@ -249,6 +313,8 @@ def handle_batch(args: argparse.Namespace, console: Console) -> int:
         return 2
 
     config = load_config()
+    if args.home_country:
+        config.home_country = args.home_country.strip().upper()
     ctx = build_context(config, force_refresh=args.refresh_lists, timeout=args.timeout)
 
     err_console.print(f"Checking {len(ips)} IP(s) across {len(selected)} source(s), {args.parallel} at a time...")
@@ -311,6 +377,8 @@ def main(argv=None) -> int:
 
     if args.command == "keys":
         return handle_keys(args, console)
+    if args.command == "config":
+        return handle_config(args, console)
     if args.command == "batch":
         return handle_batch(args, console)
     return handle_check(args, console)
