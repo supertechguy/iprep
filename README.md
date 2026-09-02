@@ -293,26 +293,33 @@ Undated evidence (most blocklists) is never assumed stale.
 
 ## Suggestions / natural next additions
 
-Roughly in order of value if you want to extend this:
+Done since the first cut:
 
-1. **Deeper temporal context.** The verdict now shows the most recent flagged
-   date and won't let a lone stale hit force `malicious` (see "How the verdict
-   is computed"). Still room to go further: a proper age-decay on each source's
-   score, and pulling dates out of more sources (VT's `last_analysis_date`,
-   OTX pulse timestamps).
-2. **CIDR/subnet rollup.** If you're investigating an incident, seeing "this
+- ~~**Temporal context.**~~ The verdict shows the most recent flagged date and
+  won't let a lone stale (>1y) hit force `malicious` (see "How the verdict is
+  computed"). Room to go further still: proper age-decay on each source's
+  score, and pulling dates out of more sources (VT's `last_analysis_date`,
+  OTX pulse timestamps).
+- ~~**Local check journal.**~~ `iprep config set journal on` records every
+  check to a local SQLite DB; `iprep history` shows how a verdict has moved
+  over time (see [Check journal](#check-journal)).
+
+Still open, roughly in order of value:
+
+1. **CIDR/subnet rollup.** If you're investigating an incident, seeing "this
    /24 has 6 other IPs also flagged in the last 90 days" is often more
    actionable than any single-IP verdict. (`iprep batch` gets you partway
    there today if you already have the candidate IP list.)
-3. **Local result caching with a short TTL** (minutes, not hours) so
-   re-running `iprep` on the same IP a few times while investigating doesn't
-   burn API quota — separate from the long-TTL blocklist cache that already
-   exists.
-4. **Full IPv6 parity.** FireHOL, CINS Army, ipsum, Emerging Threats, and the
+2. **Short-TTL result cache** (minutes, not hours) so re-running `iprep` on
+   the same IP a few times while investigating doesn't burn API quota —
+   separate from both the long-TTL blocklist cache and the check journal,
+   neither of which serves this purpose.
+3. **Full IPv6 parity.** FireHOL, CINS Army, ipsum, Emerging Threats, and the
    Tor exit list are IPv4-only at the source (confirmed against the
    live feeds) — no fix on `iprep`'s end will close that, short of finding
    IPv6-native replacements for each. Spamhaus, ASN, RDAP, reverse DNS,
-   Blocklist.de, and VPN/Proxy detection already fully support IPv6.
+   Blocklist.de, Geolocation, Cloud, RPKI, Passive DNS, and VPN/Proxy
+   detection already fully support IPv6.
 
 ## Project layout
 
