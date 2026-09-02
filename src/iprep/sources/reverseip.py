@@ -54,6 +54,9 @@ def check(ip: str, ctx: Context) -> SourceResult:
 
     if capped:
         summary = f"500+ domains — {kind}"
+    elif len(domains) > 15:
+        # a sample isn't informative at this scale, just the count
+        summary = f"{len(domains)} domains — {kind}"
     else:
         shown = ", ".join(domains[:6]) + (f" … (+{len(domains) - 6} more)" if len(domains) > 6 else "")
         summary = f"{len(domains)} domain(s) — {kind}: {shown}"
