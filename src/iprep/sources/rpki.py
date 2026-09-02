@@ -4,7 +4,7 @@ import requests
 
 from ..base import SourceResult
 from ..context import Context
-from ..netutil import lookup_origin
+from ..netutil import cached_origin
 
 # RPKI route-origin validation via RIPEstat. Tells you whether the BGP
 # announcement this IP is reachable through is cryptographically authorised by
@@ -19,7 +19,7 @@ API_URL = "https://stat.ripe.net/data/rpki-validation/data.json"
 
 
 def check(ip: str, ctx: Context) -> SourceResult:
-    origin = lookup_origin(ip, ctx.dns_resolver)
+    origin = cached_origin(ip, ctx)
     if origin is None or not origin["asn"] or not origin["prefix"]:
         return SourceResult(name="RPKI", ok=True, verdict="unknown", category="context", summary="no announced route to validate")
 

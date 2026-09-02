@@ -20,11 +20,8 @@ def check(ip: str, ctx: Context) -> SourceResult:
     if ctx.config.otx_api_key:
         headers["X-OTX-API-Key"] = ctx.config.otx_api_key
 
-    # OTX passive-DNS is consistently slower than its other endpoints; give it
-    # more headroom than the default per-source timeout.
-    timeout = max(ctx.timeout, 25.0)
     try:
-        resp = ctx.session.get(API_URL.format(family=family, ip=ip), headers=headers, timeout=timeout)
+        resp = ctx.session.get(API_URL.format(family=family, ip=ip), headers=headers, timeout=ctx.timeout)
     except requests.Timeout:
         return SourceResult(name="Passive DNS", ok=False, error="timed out", summary="OTX passive-DNS is often slow — retry, or raise --timeout", category="context")
     except requests.RequestException as e:

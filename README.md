@@ -208,6 +208,14 @@ iprep keys set virustotal           # add an API key (see "API keys" above)
 iprep history 1.2.3.4               # how this IP's verdict has changed over time (needs the journal)
 ```
 
+Every source is queried concurrently (one thread each), so a full check of
+~30 sources takes about as long as the single slowest one — typically ~1–2s
+on a warm cache. Two knobs bound the wait: `--timeout` (per HTTP request to
+one source, default 15s) and `--max-wait` (overall deadline, default 18s —
+any source still running is reported as `timed out` and the report prints
+anyway, so one hung service can't stall the whole run). Raise both together
+if you're on a slow link.
+
 ### Check journal
 
 Off by default. With `iprep config set journal on`, every `check`/`batch` run

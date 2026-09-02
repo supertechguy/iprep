@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from ..base import SourceResult
 from ..context import Context
-from ..netutil import lookup_origin
+from ..netutil import cached_origin
 
 # Origin AS / BGP prefix via Team Cymru's free DNS service (netutil.lookup_origin).
 # Pure context. The "is this whole AS bad" question is answered separately by
@@ -11,7 +11,7 @@ from ..netutil import lookup_origin
 
 
 def check(ip: str, ctx: Context) -> SourceResult:
-    origin = lookup_origin(ip, ctx.dns_resolver)
+    origin = cached_origin(ip, ctx)
     if origin is None:
         return SourceResult(name="ASN", ok=True, verdict="unknown", category="context", summary="no ASN/BGP origin found (unannounced or reserved space)")
 

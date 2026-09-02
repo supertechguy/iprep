@@ -4,7 +4,7 @@ import json
 
 from ..base import SourceResult
 from ..context import Context
-from ..netutil import lookup_origin
+from ..netutil import cached_origin
 
 # Spamhaus ASN-DROP: whole autonomous systems that are hijacked or operated by
 # bad actors ("bulletproof" hosting). Membership means the entire network the
@@ -31,7 +31,7 @@ def _asndrop(ctx: Context) -> dict[int, dict]:
 
 
 def check(ip: str, ctx: Context) -> SourceResult:
-    origin = lookup_origin(ip, ctx.dns_resolver)
+    origin = cached_origin(ip, ctx)
     if origin is None or not origin["asn"]:
         return SourceResult(name="Spamhaus ASN-DROP", ok=True, verdict="unknown", summary="no announced origin AS to check")
 

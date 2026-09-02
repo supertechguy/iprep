@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from threading import Lock
 
 import dns.resolver
 import requests
@@ -18,6 +19,10 @@ class Context:
     session: requests.Session
     dns_resolver: dns.resolver.Resolver
     timeout: float = 15.0
+    # memo for netutil.cached_origin - several sources (asn, asndrop, cloud,
+    # rpki) each need the announcing AS/prefix; look it up once per IP.
+    origin_memo: dict = field(default_factory=dict, compare=False, repr=False)
+    origin_lock: Lock = field(default_factory=Lock, compare=False, repr=False)
 
 
 def build_context(
