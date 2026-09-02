@@ -47,6 +47,8 @@ $ iprep 45.142.212.10
 | **RDAP/Whois** | Org, network name, country, abuse contact — via `rdap.org` (structured, no legacy whois parsing) | No | Yes |
 | **ASN** | Announcing AS number/name and BGP prefix, via Team Cymru's DNS service; flags likely anycast (prefix announced from multiple ASes) | No | Yes |
 | **Cloud** | Cloud-provider + region attribution (AWS/GCP/Oracle/DigitalOcean/Cloudflare via published prefix lists; Azure/Hetzner/OVH/Linode/Vultr/… via origin ASN) | No | Yes |
+| **RPKI** | Route-origin validation of the IP's BGP announcement (valid / invalid / unknown) via RIPEstat — an invalid route can mean a hijack or leak | No | Yes (via ASN) |
+| **Passive DNS** | Domains that have historically resolved to this IP, with first/last-seen (via OTX) | No | Yes |
 | **Reverse IP** | How many domains currently resolve to this IP — dedicated host vs. shared hosting / multi-tenant (via HackerTarget) | No | IPv4 |
 | **Reverse DNS** | PTR record + forward-confirmation (AAAA-aware) | No | Yes |
 | **Tor** | Whether the IP is a known Tor exit node | No | No (feed is IPv4-only) |
@@ -99,8 +101,9 @@ approximate — accurate to the country level, rough-to-wrong at the city
 level, and defeated by VPNs/proxies (cross-check the VPN/Proxy row).
 
 Reputation sources feed the aggregate score/verdict; context sources
-(Geolocation, RDAP, ASN, Cloud, Reverse IP, InternetDB, reverse DNS, Tor,
-VPN/Proxy) are shown for enrichment only and don't move the needle — they help you interpret *why* something looks the
+(Geolocation, RDAP, ASN, Cloud, RPKI, Passive DNS, Reverse IP, InternetDB,
+reverse DNS, Tor, VPN/Proxy) are shown for enrichment only and don't move
+the needle — they help you interpret *why* something looks the
 way it does (e.g. "malicious per AbuseIPDB, and it's a residential ISP in a
 country you don't do business with" vs. "malicious per AbuseIPDB, but it's
 inside a well-known cloud provider's range").
