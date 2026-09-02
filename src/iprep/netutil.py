@@ -54,6 +54,21 @@ def lookup_origin(ip: str, resolver: dns.resolver.Resolver) -> dict | None:
     }
 
 
+def cached_origin(ip: str, ctx) -> dict | None:
+    """lookup_origin memoized on the shared Context, so the handful of sources
+    that need the announcing AS (asn, asndrop, cloud, rpki) resolve it once
+    between them instead of each firing an identical Cymru query.
+
+    The lock is held across the lookup on a cache miss: concurrent callers then
+    block on the first one's result rather than racing to duplicate it. That
+    serialises ~4 callers for one ~200ms DNS round-trip - the same total
+    latency as doing it in parallel, minus the redundant network calls."""
+    with ctx.origin_lock:
+        if ip not in ctx.origin_memo:
+            ctx.origin_memo[ip] = lookup_origin(ip, ctx.dns_resolver)
+        return ctx.origin_memo[ip]
+
+
 def dnsbl_query(ip: str, zone: str) -> str:
     """Build a DNSBL/RBL-style query name for an IPv4 or IPv6 address against
     `zone`, e.g. dnsbl_query("1.2.3.4", "zen.spamhaus.org") ->

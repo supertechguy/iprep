@@ -10,7 +10,7 @@ dependencies = [
 ]
 
 [project.scripts]
-iprep = "iprep.cli:main"
+iprep = "iprep.cli:run"
 
 [build-system]
 requires = ["setuptools>=68"]

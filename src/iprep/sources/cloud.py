@@ -7,7 +7,7 @@ import json
 
 from ..base import SourceResult
 from ..context import Context
-from ..netutil import lookup_origin
+from ..netutil import cached_origin
 
 # "Is this a cloud VM, and whose / which region?" - more actionable than the
 # VPN/Proxy source's binary "datacenter or not". Providers that publish an
@@ -153,7 +153,7 @@ def check(ip: str, ctx: Context) -> SourceResult:
             )
 
     # Fall back to origin-ASN attribution.
-    origin = lookup_origin(ip, ctx.dns_resolver)
+    origin = cached_origin(ip, ctx)
     if origin and origin["asn"] in _ASN_PROVIDERS:
         provider = _ASN_PROVIDERS[origin["asn"]]
         return SourceResult(

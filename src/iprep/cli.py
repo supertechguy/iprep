@@ -5,6 +5,7 @@ import csv
 import getpass
 import ipaddress
 import json
+import os
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict
@@ -106,7 +107,8 @@ def build_parser() -> argparse.ArgumentParser:
     check_p.add_argument("--json", action="store_true", help="output machine-readable JSON instead of a formatted report")
     check_p.add_argument("--sources", help="comma-separated subset of sources to query: " + ",".join(SOURCE_MODULES))
     check_p.add_argument("--refresh-lists", action="store_true", help="force re-download of all cached blocklist/list-based feeds")
-    check_p.add_argument("--timeout", type=float, default=15.0, help="per-source request timeout in seconds (default 15)")
+    check_p.add_argument("--timeout", type=float, default=15.0, help="per-request timeout for a single source in seconds (default 15)")
+    check_p.add_argument("--max-wait", type=float, default=18.0, help="overall deadline in seconds; sources still running after this are reported as timed-out (default 18)")
     check_p.add_argument("--home-country", metavar="CC", help="ISO 3166-1 alpha-2 code of your location; tags the geolocated IP as LOCAL or FOREIGN (overrides the `iprep config` / IPREP_HOME_COUNTRY setting)")
 
     batch_p = sub.add_parser("batch", help="check every IP in a file and emit a summary")
@@ -117,7 +119,8 @@ def build_parser() -> argparse.ArgumentParser:
     batch_p.add_argument("--output", "-o", help="write output to this file instead of stdout")
     batch_p.add_argument("--sources", help="comma-separated subset of sources to query: " + ",".join(SOURCE_MODULES))
     batch_p.add_argument("--refresh-lists", action="store_true", help="force re-download of all cached blocklist/list-based feeds")
-    batch_p.add_argument("--timeout", type=float, default=15.0, help="per-source request timeout in seconds (default 15)")
+    batch_p.add_argument("--timeout", type=float, default=15.0, help="per-request timeout for a single source in seconds (default 15)")
+    batch_p.add_argument("--max-wait", type=float, default=18.0, help="overall per-IP deadline in seconds; sources still running after this are reported as timed-out (default 18)")
     batch_p.add_argument("--parallel", type=int, default=4, help="how many IPs to check concurrently (default 4; keep this low if you have low-quota API keys configured)")
     batch_p.add_argument("--home-country", metavar="CC", help="ISO 3166-1 alpha-2 code of your location; tags each geolocated IP as LOCAL or FOREIGN (overrides the `iprep config` / IPREP_HOME_COUNTRY setting)")
 
@@ -172,16 +175,39 @@ def resolve_sources(sources_arg: str | None, console: Console) -> dict | None:
     return {n: SOURCE_MODULES[n] for n in names}
 
 
-def run_checks(ip: str, ctx: Context, selected: dict) -> tuple[list[SourceResult], Verdict]:
+def run_checks(ip: str, ctx: Context, selected: dict, max_wait: float = 18.0) -> tuple[list[SourceResult], Verdict]:
+    """Query every selected source concurrently (one thread each) and combine.
+
+    A single hung source can't hold up the report: anything still running after
+    `max_wait` seconds is abandoned and recorded as timed-out, and the pool is
+    torn down without blocking on it.
+    """
     results: list[SourceResult] = []
-    with ThreadPoolExecutor(max_workers=max(len(selected), 1)) as pool:
-        futures = {pool.submit(mod.check, ip, ctx): name for name, mod in selected.items()}
-        for fut in as_completed(futures):
+    processed: set = set()
+    pool = ThreadPoolExecutor(max_workers=max(len(selected), 1))
+    futures = {pool.submit(mod.check, ip, ctx): name for name, mod in selected.items()}
+    try:
+        for fut in as_completed(futures, timeout=max_wait):
+            processed.add(fut)
             name = futures[fut]
             try:
                 results.append(fut.result())
             except Exception as e:
                 results.append(SourceResult(name=name, ok=False, error=str(e), summary="unexpected error"))
+    except TimeoutError:
+        for fut, name in futures.items():
+            if fut in processed:
+                continue
+            if fut.done() and not fut.cancelled():
+                try:
+                    results.append(fut.result())
+                    continue
+                except Exception as e:
+                    results.append(SourceResult(name=name, ok=False, error=str(e), summary="unexpected error"))
+                    continue
+            results.append(SourceResult(name=name, ok=False, error=f"no response within {max_wait:g}s", summary="timed out"))
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
     return results, aggregate(results)
 
 
@@ -313,7 +339,7 @@ def handle_check(args: argparse.Namespace, console: Console) -> int:
     ctx = build_context(config, force_refresh=args.refresh_lists, timeout=args.timeout)
 
     prior = history.prior_summary(args.ip) if history.enabled(config) else None
-    results, verdict = run_checks(args.ip, ctx, selected)
+    results, verdict = run_checks(args.ip, ctx, selected, max_wait=args.max_wait)
     if history.enabled(config):
         history.record(args.ip, verdict)
 
@@ -380,7 +406,7 @@ def handle_batch(args: argparse.Namespace, console: Console) -> int:
     rows: list[tuple[str, list[SourceResult], Verdict]] = [None] * len(ips)  # type: ignore[list-item]
     completed = 0
     with ThreadPoolExecutor(max_workers=max(args.parallel, 1)) as pool:
-        futures = {pool.submit(run_checks, ip, ctx, selected): ip for ip in ips}
+        futures = {pool.submit(run_checks, ip, ctx, selected, args.max_wait): ip for ip in ips}
         for fut in as_completed(futures):
             ip = futures[fut]
             results, verdict = fut.result()
@@ -446,5 +472,22 @@ def main(argv=None) -> int:
     return handle_check(args, console)
 
 
+def run() -> None:
+    """Console-script entry point.
+
+    Exits hard once the result is printed: a source that blew past the overall
+    deadline is still stuck in a (non-daemon) pool thread doing network I/O,
+    and a normal exit would join it - leaving the terminal hanging for seconds
+    after the report is already on screen.
+    """
+    code = 1
+    try:
+        code = main()
+    finally:
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os._exit(code)
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    run()
