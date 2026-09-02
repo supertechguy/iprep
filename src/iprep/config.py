@@ -26,6 +26,15 @@ KEY_SPECS: dict[str, tuple[str, str, str]] = {
 }
 KNOWN_SOURCES = list(KEY_SPECS)
 
+# non-secret setting slug -> (Config field name, env var name, TOML key name).
+# Managed via `iprep config` and stored in the `[settings]` table of the same
+# config.toml as the keys (never in the repo).
+SETTING_SPECS: dict[str, tuple[str, str, str]] = {
+    "home-country": ("home_country", "IPREP_HOME_COUNTRY", "home_country"),
+    "journal": ("journal", "IPREP_JOURNAL", "journal"),
+}
+KNOWN_SETTINGS = list(SETTING_SPECS)
+
 
 @dataclass
 class Config:
@@ -37,27 +46,44 @@ class Config:
     otx_api_key: str | None = None
     threatfox_api_key: str | None = None
     crowdsec_api_key: str | None = None
+    # ISO 3166-1 alpha-2 code of "where we are"; used to tag a geolocated IP
+    # as LOCAL vs FOREIGN. None = don't tag, just report the location.
+    home_country: str | None = None
+    # "on" to journal every check to a local SQLite DB (see history.py).
+    journal: str | None = None
 
 
-def _read_toml_keys() -> dict[str, str]:
+def _read_toml() -> dict:
     if tomllib and CONFIG_PATH.exists():
         with open(CONFIG_PATH, "rb") as f:
-            data = tomllib.load(f)
-        return data.get("keys", {})
+            return tomllib.load(f)
     return {}
 
 
+def _read_toml_keys() -> dict[str, str]:
+    return _read_toml().get("keys", {})
+
+
+def _read_toml_settings() -> dict[str, str]:
+    return _read_toml().get("settings", {})
+
+
 def load_config() -> Config:
-    """Env vars win; ~/.config/iprep/config.toml (managed by `iprep keys`) is the fallback.
+    """Env vars win; ~/.config/iprep/config.toml (managed by `iprep keys` /
+    `iprep config`) is the fallback.
 
     This file lives under the user's home directory, entirely outside any git
     repository, so keys stored there can never end up committed alongside
     the project source.
     """
     file_keys = _read_toml_keys()
+    file_settings = _read_toml_settings()
     values = {}
     for field_name, env_name, toml_name in KEY_SPECS.values():
         values[field_name] = os.environ.get(env_name) or file_keys.get(toml_name) or None
+    for field_name, env_name, toml_name in SETTING_SPECS.values():
+        raw = os.environ.get(env_name) or file_settings.get(toml_name) or None
+        values[field_name] = raw.strip().upper() if (field_name == "home_country" and raw) else raw
     return Config(**values)
 
 
@@ -71,17 +97,56 @@ def key_origin(source: str) -> str | None:
     return None
 
 
+def setting_origin(name: str) -> str | None:
+    """Where a setting's active value currently comes from: 'env', 'file', or None."""
+    _, env_name, toml_name = SETTING_SPECS[name]
+    if os.environ.get(env_name):
+        return "env"
+    if _read_toml_settings().get(toml_name):
+        return "file"
+    return None
+
+
 def mask(value: str) -> str:
     if len(value) <= 8:
         return "*" * len(value)
     return f"{value[:4]}{'*' * (len(value) - 8)}{value[-4:]}"
 
 
-def save_key(source: str, value: str | None) -> None:
-    """Add/update (or remove, if value is None/empty) one key in
-    ~/.config/iprep/config.toml, leaving any other stored keys untouched.
+def _escape(value: str) -> str:
+    return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _write_config(file_keys: dict[str, str], file_settings: dict[str, str]) -> None:
+    """Rewrite ~/.config/iprep/config.toml from the given key/setting maps.
 
     Only ever writes to CONFIG_PATH - never touches anything inside the repo.
+    """
+    CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        CONFIG_PATH.parent.chmod(0o700)
+    except OSError:
+        pass
+
+    lines = [
+        "# iprep configuration - managed via `iprep keys` / `iprep config`.",
+        "# This file lives outside the git repo and is never committed.",
+        "",
+        "[keys]",
+    ]
+    for _, _, name in KEY_SPECS.values():
+        lines.append(f'{name} = "{_escape(file_keys.get(name, ""))}"')
+    lines += ["", "[settings]"]
+    for _, _, name in SETTING_SPECS.values():
+        lines.append(f'{name} = "{_escape(str(file_settings.get(name, "")))}"')
+
+    CONFIG_PATH.write_text("\n".join(lines) + "\n")
+    CONFIG_PATH.chmod(0o600)
+
+
+def save_key(source: str, value: str | None) -> None:
+    """Add/update (or remove, if value is None/empty) one key in
+    ~/.config/iprep/config.toml, leaving any other stored keys/settings untouched.
     """
     if source not in KEY_SPECS:
         raise ValueError(f"unknown source: {source}")
@@ -93,22 +158,21 @@ def save_key(source: str, value: str | None) -> None:
     else:
         file_keys.pop(toml_name, None)
 
-    CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        CONFIG_PATH.parent.chmod(0o700)
-    except OSError:
-        pass
+    _write_config(file_keys, _read_toml_settings())
 
-    lines = [
-        "# iprep API keys - managed via `iprep keys set` / `iprep keys unset`.",
-        "# This file lives outside the git repo and is never committed.",
-        "",
-        "[keys]",
-    ]
-    for _, _, name in KEY_SPECS.values():
-        v = file_keys.get(name, "")
-        escaped = v.replace("\\", "\\\\").replace('"', '\\"')
-        lines.append(f'{name} = "{escaped}"')
 
-    CONFIG_PATH.write_text("\n".join(lines) + "\n")
-    CONFIG_PATH.chmod(0o600)
+def save_setting(name: str, value: str | None) -> None:
+    """Add/update (or remove, if value is None/empty) one non-secret setting in
+    ~/.config/iprep/config.toml, leaving any stored keys/other settings untouched.
+    """
+    if name not in SETTING_SPECS:
+        raise ValueError(f"unknown setting: {name}")
+
+    file_settings = _read_toml_settings()
+    _, _, toml_name = SETTING_SPECS[name]
+    if value:
+        file_settings[toml_name] = value
+    else:
+        file_settings.pop(toml_name, None)
+
+    _write_config(_read_toml_keys(), file_settings)

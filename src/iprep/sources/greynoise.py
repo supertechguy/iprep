@@ -55,5 +55,5 @@ def check(ip: str, ctx: Context) -> SourceResult:
         verdict=verdict,
         score=score,
         summary=summary,
-        details={"classification": classification, "noise": noise, "riot": riot, "name": name, "link": d.get("link")},
+        details={"classification": classification, "noise": noise, "riot": riot, "name": name, "last_seen": d.get("last_seen"), "link": d.get("link")},
     )

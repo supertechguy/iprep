@@ -27,7 +27,9 @@ $ iprep 45.142.212.10
 | **VirusTotal** | Multi-engine malicious/suspicious verdicts, reputation score, tags | Yes (free tier) | Yes |
 | **AbuseIPDB** | Crowdsourced abuse confidence score, report count, ISP/usage type | Yes (free tier) | Yes |
 | **Shodan** | Open ports, fingerprinted services/versions, known CVEs (with CVSS/verified status), SSL cert notes, risky tags | Yes (paid-ish) | Yes |
+| **InternetDB** | The free, keyless slice of Shodan: open ports, known CVEs, tags, hostnames (no banners/timestamps) | No | Yes |
 | **Spamhaus** | ZEN DNSBL lookup (SBL/XBL/CSS/DROP = abuse; PBL = policy-only, scored lower) | No | Yes* |
+| **Spamhaus ASN-DROP** | Whether the announcing AS is wholly hijacked / bulletproof-hosting (the entire network is disreputable) | No | Yes (via ASN) |
 | **FireHOL** | Membership on `firehol_level1/2/3` aggregate blocklists (CIDR-aware) | No | No (aggregates are IPv4-only) |
 | **CINS Army** | Membership on the CI Army "bad guys" list (long-established, Snort/Suricata community) | No | No (feed is IPv4-only) |
 | **Blocklist.de** | Crowdsourced fail2ban-style abuse reports (SSH/mail/web bruteforce) | No | Yes |
@@ -41,9 +43,14 @@ $ iprep 45.142.212.10
 | **ThreatFox** | abuse.ch malware IOC match — malware family, threat type, confidence level | Yes (free, instant signup) | Unverified |
 | **CrowdSec CTI** | Crowd-sourced reputation/confidence/behaviors from CrowdSec's sensor network | Yes (free, 120 lookups/month) | Unverified |
 | **GreyNoise** | Internet-scanner vs. targeted-attacker classification, RIOT (known-benign service) tagging | Optional (free tier) | Unverified |
+| **Geolocation** | Country/region/city, lat-lon, current local time / off-hours, and (if you set a home country) a LOCAL vs FOREIGN tag — via `ipwho.is` | No | Yes |
 | **RDAP/Whois** | Org, network name, country, abuse contact — via `rdap.org` (structured, no legacy whois parsing) | No | Yes |
-| **ASN** | Announcing AS number/name and BGP prefix, via Team Cymru's DNS service | No | Yes |
-| **Reverse DNS** | PTR record + forward-confirmation (AAAA-aware) | No | Yes |
+| **ASN** | Announcing AS number/name and BGP prefix, via Team Cymru's DNS service; flags likely anycast (prefix announced from multiple ASes) | No | Yes |
+| **Cloud** | Cloud-provider + region attribution (AWS/GCP/Oracle/DigitalOcean/Cloudflare via published prefix lists; Azure/Hetzner/OVH/Linode/Vultr/… via origin ASN) | No | Yes |
+| **RPKI** | Route-origin validation of the IP's BGP announcement (valid / invalid / unknown) via RIPEstat — an invalid route can mean a hijack or leak | No | Yes (via ASN) |
+| **Passive DNS** | Domains that have historically resolved to this IP, with first/last-seen (via OTX) | No | Yes |
+| **Reverse IP** | How many domains currently resolve to this IP — dedicated host vs. shared hosting / multi-tenant (via HackerTarget) | No | IPv4 |
+| **Reverse DNS** | PTR record + forward-confirmation (AAAA-aware), plus a hostname-shape guess (dynamic/residential vs. static/server vs. cloud vs. CDN vs. mail) | No | Yes |
 | **Tor** | Whether the IP is a known Tor exit node | No | No (feed is IPv4-only) |
 | **VPN/Proxy** | Whether the IP is a known commercial VPN exit, or broader datacenter/hosting space | No | Yes |
 
@@ -82,9 +89,21 @@ strict "vpn" list (known commercial VPN provider ranges) and a broader
 useful for "this isn't a residential connection" but plenty of datacenter
 IPs are ordinary cloud servers, not VPN exits).
 
+**Why is Geolocation just informational?** Where an IP is has no bearing on
+whether it's been used maliciously — a bad actor can be next door and a clean
+host can be on the other side of the planet — so the country/city never moves
+the aggregate score. It's there to help you triage: set your home country
+(`iprep config set home-country US`, or `IPREP_HOME_COUNTRY=US`, or
+`--home-country US` per run) and each looked-up IP is tagged **LOCAL** (same
+country) or **FOREIGN**, which is often the fastest first cut on "is this
+traffic even from somewhere we do business?". IP geolocation is
+approximate — accurate to the country level, rough-to-wrong at the city
+level, and defeated by VPNs/proxies (cross-check the VPN/Proxy row).
+
 Reputation sources feed the aggregate score/verdict; context sources
-(RDAP, ASN, reverse DNS, Tor, VPN/Proxy) are shown for enrichment only and
-don't move the needle — they help you interpret *why* something looks the
+(Geolocation, RDAP, ASN, Cloud, RPKI, Passive DNS, Reverse IP, InternetDB,
+reverse DNS, Tor, VPN/Proxy) are shown for enrichment only and don't move
+the needle — they help you interpret *why* something looks the
 way it does (e.g. "malicious per AbuseIPDB, and it's a residential ISP in a
 country you don't do business with" vs. "malicious per AbuseIPDB, but it's
 inside a well-known cloud provider's range").
@@ -159,6 +178,24 @@ manager/secret store than on disk. `config.toml.example` in this
 repo is just a template for reference; it holds no real keys and is safe to
 commit.
 
+## Non-secret settings
+
+`iprep config` manages non-secret preferences, stored in the `[settings]`
+table of the same `~/.config/iprep/config.toml`:
+
+```bash
+iprep config set home-country US    # ISO 3166-1 alpha-2 code of where "we" are
+iprep config show                   # list settings and where each value comes from
+iprep config unset home-country
+```
+
+- **`home-country`** — when set, the Geolocation source tags each looked-up IP
+  as `LOCAL` (same country) or `FOREIGN`. Also settable via the
+  `IPREP_HOME_COUNTRY` env var (which wins over the file) or per-run with
+  `--home-country`.
+- **`journal`** — `on` to log every check to a local SQLite DB for
+  `iprep history` (see [Check journal](#check-journal)). Also `IPREP_JOURNAL`.
+
 ## Usage
 
 ```bash
@@ -166,8 +203,27 @@ iprep 1.2.3.4                       # full report (shorthand for `iprep check 1.
 iprep 1.2.3.4 --json                # machine-readable output for scripting
 iprep 1.2.3.4 --sources virustotal,abuseipdb,spamhaus   # only query specific sources
 iprep 1.2.3.4 --refresh-lists       # force re-download of cached blocklists
+iprep 1.2.3.4 --home-country US     # tag the Geolocation row LOCAL or FOREIGN
 iprep keys set virustotal           # add an API key (see "API keys" above)
+iprep history 1.2.3.4               # how this IP's verdict has changed over time (needs the journal)
 ```
+
+### Check journal
+
+Off by default. With `iprep config set journal on`, every `check`/`batch` run
+appends a row (IP, timestamp, verdict, score, what flagged it) to a local
+SQLite DB at `~/.local/share/iprep/history.db` — nothing leaves your machine.
+Once it's on:
+
+```bash
+iprep history            # the most recent checks across all IPs
+iprep history 1.2.3.4    # the full timeline for one IP
+```
+
+A `check` on an IP you've looked at before then also prints a one-line recap
+under the verdict, and flags when the verdict has changed since a prior run.
+Over time this becomes your own first-seen/last-seen record, independent of
+what any upstream source remembers.
 
 ### Batch mode
 
@@ -218,15 +274,24 @@ This is a starting heuristic, not a scientifically tuned model — the weights
 in `aggregate.py` are easy to adjust once you see how it behaves against IPs
 you already have ground truth on.
 
+**Recency.** A few sources (AbuseIPDB, ThreatFox, GreyNoise, CrowdSec) report
+when they last saw the IP misbehave. `iprep` surfaces the most recent of those
+under the verdict ("most recent flagged activity: 2021-07-06 (5.3y ago) ⚠
+stale"), and applies one guard: if the *only* thing forcing a `malicious`
+verdict is a single high-confidence hit, **and** every source that flagged the
+IP also says it's been quiet for over a year, the override is dropped and the
+verdict falls back to the weighted average (with a `note:` explaining why).
+Undated evidence (most blocklists) is never assumed stale.
+
 ## Suggestions / natural next additions
 
 Roughly in order of value if you want to extend this:
 
-1. **Historical/temporal context.** Right now every source is a point-in-time
-   snapshot. AbuseIPDB and VirusTotal both include "first seen"/"last
-   reported" timestamps already surfaced in `details` — worth promoting into
-   the headline report (an IP maliciously active yesterday is a different
-   story than one whose worst report was 3 years ago).
+1. **Deeper temporal context.** The verdict now shows the most recent flagged
+   date and won't let a lone stale hit force `malicious` (see "How the verdict
+   is computed"). Still room to go further: a proper age-decay on each source's
+   score, and pulling dates out of more sources (VT's `last_analysis_date`,
+   OTX pulse timestamps).
 2. **CIDR/subnet rollup.** If you're investigating an incident, seeing "this
    /24 has 6 other IPs also flagged in the last 90 days" is often more
    actionable than any single-IP verdict. (`iprep batch` gets you partway
@@ -246,11 +311,13 @@ Roughly in order of value if you want to extend this:
 ```
 src/iprep/
   base.py        SourceResult - the normalized shape every source returns
-  config.py      API key loading/storage (env vars + `iprep keys`-managed TOML config)
+  config.py      API key + settings loading/storage (env vars + `iprep keys`/`iprep config`-managed TOML)
   cache.py       disk cache for the blocklist-style feeds, with fetch validation
-  netutil.py     shared IPv4/IPv6 helpers (version detection, DNSBL query building)
+  netutil.py     shared IPv4/IPv6 helpers (version detection, DNSBL query building, Team Cymru origin lookup)
   context.py     shared HTTP session / DNS resolver / cache handed to sources
   aggregate.py   combines all SourceResults into one Verdict
+  temporal.py    pulls "last seen bad" dates out of source results; feeds the staleness guard
+  history.py     optional local SQLite journal of every check (`iprep config set journal on`)
   report.py      rich terminal rendering
   cli.py         argument parsing, parallel dispatch, JSON output
   sources/       one module per source, each exposing check(ip, ctx) -> SourceResult

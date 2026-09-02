@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .base import SourceResult
+from .temporal import Temporal, summarize
 
 # Relative confidence weighting for the sources that contribute to the score.
 # Direct blocklist/DNSBL hits (Spamhaus, Feodo Tracker) and the two big
@@ -19,6 +20,7 @@ WEIGHTS = {
     "ipsum": 0.8,
     "Emerging Threats": 0.8,
     "ThreatFox": 0.9,
+    "Spamhaus ASN-DROP": 0.9,
     "Binary Defense": 0.8,
     "Barracuda RBL": 0.8,
     "CrowdSec CTI": 0.8,
@@ -36,14 +38,17 @@ class Verdict:
     contributing: list[str]
     sources_ok: int
     sources_total: int
+    temporal: Temporal = field(default_factory=Temporal)
+    notes: list[str] = field(default_factory=list)
 
 
 def aggregate(results: list[SourceResult]) -> Verdict:
     rep = [r for r in results if r.category == "reputation"]
     usable = [r for r in rep if r.ok and r.score is not None]
+    temporal = summarize(results)
 
     if not usable:
-        return Verdict(label="unknown", score=0.0, contributing=[], sources_ok=0, sources_total=len(rep))
+        return Verdict(label="unknown", score=0.0, contributing=[], sources_ok=0, sources_total=len(rep), temporal=temporal)
 
     weight_total = sum(WEIGHTS.get(r.name, 1.0) for r in usable)
     weighted_sum = sum(r.score * WEIGHTS.get(r.name, 1.0) for r in usable)
@@ -54,6 +59,22 @@ def aggregate(results: list[SourceResult]) -> Verdict:
     # A single high-confidence blocklist/API hit is enough to call it malicious
     # outright, even if the weighted average gets diluted by quiet sources.
     hard_hits = [r for r in usable if r.verdict == "malicious" and WEIGHTS.get(r.name, 1.0) >= 1.0]
+    notes: list[str] = []
+
+    # ...but not if that hit is the *only* strong evidence and every source that
+    # flagged the IP also told us it hasn't been seen misbehaving in over a year.
+    override_suppressed = (
+        bool(hard_hits)
+        and score < 50
+        and temporal.stale
+        and temporal.all_flaggers_dated
+    )
+    if override_suppressed:
+        hard_hits = []
+        notes.append(
+            f"a lone stale hit ({temporal.last_flagged}) would have forced 'malicious'; "
+            "downgraded — no source reports activity in the last year"
+        )
 
     if hard_hits or score >= 50:
         label = "malicious"
@@ -62,10 +83,15 @@ def aggregate(results: list[SourceResult]) -> Verdict:
     else:
         label = "clean"
 
+    if label == "malicious" and temporal.stale and temporal.all_flaggers_dated:
+        notes.append(f"all dated evidence is >1y old (newest: {temporal.last_flagged})")
+
     return Verdict(
         label=label,
         score=round(score, 1),
         contributing=contributing,
         sources_ok=len(usable),
         sources_total=len(rep),
+        temporal=temporal,
+        notes=notes,
     )
