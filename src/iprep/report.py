@@ -15,7 +15,7 @@ VERDICT_STYLE = {
 }
 
 
-def render(ip: str, results: list[SourceResult], verdict: Verdict, console: Console) -> None:
+def render(ip: str, results: list[SourceResult], verdict: Verdict, console: Console, prior=None) -> None:
     style = VERDICT_STYLE.get(verdict.label, "white")
     header = (
         f"[{style}]{verdict.label.upper()}[/{style}]  "
@@ -23,6 +23,14 @@ def render(ip: str, results: list[SourceResult], verdict: Verdict, console: Cons
         f"({verdict.sources_ok}/{verdict.sources_total} reputation sources responded)"
     )
     console.print(Panel(header, title=f"iprep report: {ip}", expand=False))
+
+    temporal_line = verdict.temporal.describe()
+    if temporal_line:
+        console.print(f"[dim]{temporal_line}[/dim]")
+    if prior is not None:
+        console.print(f"[dim]{prior.describe()}[/dim]")
+    for note in verdict.notes:
+        console.print(f"[yellow]note:[/yellow] {note}")
 
     rep_table = Table(title="Reputation sources")
     rep_table.add_column("Source")

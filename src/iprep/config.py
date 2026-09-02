@@ -31,6 +31,7 @@ KNOWN_SOURCES = list(KEY_SPECS)
 # config.toml as the keys (never in the repo).
 SETTING_SPECS: dict[str, tuple[str, str, str]] = {
     "home-country": ("home_country", "IPREP_HOME_COUNTRY", "home_country"),
+    "journal": ("journal", "IPREP_JOURNAL", "journal"),
 }
 KNOWN_SETTINGS = list(SETTING_SPECS)
 
@@ -48,6 +49,8 @@ class Config:
     # ISO 3166-1 alpha-2 code of "where we are"; used to tag a geolocated IP
     # as LOCAL vs FOREIGN. None = don't tag, just report the location.
     home_country: str | None = None
+    # "on" to journal every check to a local SQLite DB (see history.py).
+    journal: str | None = None
 
 
 def _read_toml() -> dict:

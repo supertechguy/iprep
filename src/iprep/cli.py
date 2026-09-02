@@ -13,7 +13,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 
-from . import report
+from . import history, report
 from .aggregate import Verdict, aggregate
 from .base import SourceResult
 from .config import (
@@ -146,13 +146,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     config_sub.add_parser("show", help="list current settings and where each value comes from")
 
+    history_p = sub.add_parser("history", help="show the local check journal (requires `iprep config set journal on`)")
+    history_p.add_argument("ip", nargs="?", help="show the timeline for one IP; omit for the most recent checks across all IPs")
+    history_p.add_argument("--limit", type=int, default=25, help="max rows when listing recent checks (default 25)")
+
     return p
 
 
 def _normalize_argv(argv: list[str] | None) -> list[str]:
     """Let `iprep <ip>` keep working as shorthand for `iprep check <ip>`."""
     argv = list(argv if argv is not None else sys.argv[1:])
-    if not argv or argv[0] in ("check", "batch", "keys", "config", "-h", "--help"):
+    if not argv or argv[0] in ("check", "batch", "keys", "config", "history", "-h", "--help"):
         return argv
     return ["check", *argv]
 
@@ -254,6 +258,44 @@ def handle_config(args: argparse.Namespace, console: Console) -> int:
     return 2
 
 
+def handle_history(args: argparse.Namespace, console: Console) -> int:
+    config = load_config()
+    if not history.enabled(config):
+        console.print("[yellow]The local check journal is off.[/yellow] Turn it on with [bold]iprep config set journal on[/bold].")
+
+    if args.ip:
+        try:
+            ipaddress.ip_address(args.ip)
+        except ValueError:
+            console.print(f"[bold red]error:[/bold red] '{args.ip}' is not a valid IP address")
+            return 2
+        rows = history.prior_checks(args.ip)
+        if not rows:
+            console.print(f"no journalled checks for {args.ip}")
+            return 0
+        table = Table(title=f"iprep history: {args.ip}  ({len(rows)} checks)")
+        for col in ("When (UTC)", "Verdict", "Score", "Sources", "Flagged by"):
+            table.add_column(col)
+        for r in rows:
+            style = report.VERDICT_STYLE.get(r["verdict"], "white")
+            table.add_row(r["ts"], f"[{style}]{r['verdict']}[/{style}]", f"{r['score']:.0f}" if r["score"] is not None else "-", f"{r['sources_ok']}/{r['sources_total']}", r["flagged_by"] or "-")
+        console.print(table)
+        return 0
+
+    rows = history.recent(args.limit)
+    if not rows:
+        console.print("the journal is empty")
+        return 0
+    table = Table(title=f"iprep journal — {len(rows)} most recent checks")
+    for col in ("When (UTC)", "IP", "Verdict", "Score", "Flagged by"):
+        table.add_column(col)
+    for r in rows:
+        style = report.VERDICT_STYLE.get(r["verdict"], "white")
+        table.add_row(r["ts"], r["ip"], f"[{style}]{r['verdict']}[/{style}]", f"{r['score']:.0f}" if r["score"] is not None else "-", r["flagged_by"] or "-")
+    console.print(table)
+    return 0
+
+
 def handle_check(args: argparse.Namespace, console: Console) -> int:
     try:
         ipaddress.ip_address(args.ip)
@@ -269,13 +311,17 @@ def handle_check(args: argparse.Namespace, console: Console) -> int:
     if args.home_country:
         config.home_country = args.home_country.strip().upper()
     ctx = build_context(config, force_refresh=args.refresh_lists, timeout=args.timeout)
+
+    prior = history.prior_summary(args.ip) if history.enabled(config) else None
     results, verdict = run_checks(args.ip, ctx, selected)
+    if history.enabled(config):
+        history.record(args.ip, verdict)
 
     if args.json:
         payload = {"ip": args.ip, "verdict": asdict(verdict), "sources": [asdict(r) for r in results]}
         print(json.dumps(payload, indent=2, default=str))
     else:
-        report.render(args.ip, results, verdict, console)
+        report.render(args.ip, results, verdict, console, prior=prior)
 
     return 0
 
@@ -339,6 +385,8 @@ def handle_batch(args: argparse.Namespace, console: Console) -> int:
             ip = futures[fut]
             results, verdict = fut.result()
             rows[order[ip]] = (ip, results, verdict)
+            if history.enabled(config):
+                history.record(ip, verdict)
             completed += 1
             style = report.VERDICT_STYLE.get(verdict.label, "white")
             err_console.print(f"  [{completed}/{len(ips)}] {ip}: [{style}]{verdict.label}[/{style}]")
@@ -391,6 +439,8 @@ def main(argv=None) -> int:
         return handle_keys(args, console)
     if args.command == "config":
         return handle_config(args, console)
+    if args.command == "history":
+        return handle_history(args, console)
     if args.command == "batch":
         return handle_batch(args, console)
     return handle_check(args, console)

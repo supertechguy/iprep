@@ -59,5 +59,13 @@ def check(ip: str, ctx: Context) -> SourceResult:
         verdict=verdict,
         score=float(confidence),
         summary=summary,
-        details={"entries": len(entries), "malware": malware, "threat_type": threat_type, "confidence": confidence, "link": link},
+        details={
+            "entries": len(entries),
+            "malware": malware,
+            "threat_type": threat_type,
+            "confidence": confidence,
+            "first_seen": top.get("first_seen"),
+            "last_seen": top.get("last_seen") or top.get("last_seen_utc"),
+            "link": link,
+        },
     )

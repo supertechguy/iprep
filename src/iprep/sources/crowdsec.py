@@ -46,6 +46,7 @@ def check(ip: str, ctx: Context) -> SourceResult:
     reputation = d.get("reputation", "unknown")
     confidence = d.get("confidence", "unknown")
     behaviors = [b.get("label") for b in (d.get("behaviors") or []) if b.get("label")]
+    history = d.get("history") or {}
 
     verdict, score = REPUTATION_VERDICTS.get(reputation, ("unknown", 0.0))
 
@@ -59,5 +60,5 @@ def check(ip: str, ctx: Context) -> SourceResult:
         verdict=verdict,
         score=score,
         summary=summary,
-        details={"reputation": reputation, "confidence": confidence, "behaviors": behaviors, "as_name": d.get("as_name"), "link": "https://app.crowdsec.net/"},
+        details={"reputation": reputation, "confidence": confidence, "behaviors": behaviors, "as_name": d.get("as_name"), "first_seen": history.get("first_seen"), "last_seen": history.get("last_seen"), "link": "https://app.crowdsec.net/"},
     )

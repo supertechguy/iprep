@@ -193,6 +193,8 @@ iprep config unset home-country
   as `LOCAL` (same country) or `FOREIGN`. Also settable via the
   `IPREP_HOME_COUNTRY` env var (which wins over the file) or per-run with
   `--home-country`.
+- **`journal`** — `on` to log every check to a local SQLite DB for
+  `iprep history` (see [Check journal](#check-journal)). Also `IPREP_JOURNAL`.
 
 ## Usage
 
@@ -203,7 +205,25 @@ iprep 1.2.3.4 --sources virustotal,abuseipdb,spamhaus   # only query specific so
 iprep 1.2.3.4 --refresh-lists       # force re-download of cached blocklists
 iprep 1.2.3.4 --home-country US     # tag the Geolocation row LOCAL or FOREIGN
 iprep keys set virustotal           # add an API key (see "API keys" above)
+iprep history 1.2.3.4               # how this IP's verdict has changed over time (needs the journal)
 ```
+
+### Check journal
+
+Off by default. With `iprep config set journal on`, every `check`/`batch` run
+appends a row (IP, timestamp, verdict, score, what flagged it) to a local
+SQLite DB at `~/.local/share/iprep/history.db` — nothing leaves your machine.
+Once it's on:
+
+```bash
+iprep history            # the most recent checks across all IPs
+iprep history 1.2.3.4    # the full timeline for one IP
+```
+
+A `check` on an IP you've looked at before then also prints a one-line recap
+under the verdict, and flags when the verdict has changed since a prior run.
+Over time this becomes your own first-seen/last-seen record, independent of
+what any upstream source remembers.
 
 ### Batch mode
 
@@ -254,15 +274,24 @@ This is a starting heuristic, not a scientifically tuned model — the weights
 in `aggregate.py` are easy to adjust once you see how it behaves against IPs
 you already have ground truth on.
 
+**Recency.** A few sources (AbuseIPDB, ThreatFox, GreyNoise, CrowdSec) report
+when they last saw the IP misbehave. `iprep` surfaces the most recent of those
+under the verdict ("most recent flagged activity: 2021-07-06 (5.3y ago) ⚠
+stale"), and applies one guard: if the *only* thing forcing a `malicious`
+verdict is a single high-confidence hit, **and** every source that flagged the
+IP also says it's been quiet for over a year, the override is dropped and the
+verdict falls back to the weighted average (with a `note:` explaining why).
+Undated evidence (most blocklists) is never assumed stale.
+
 ## Suggestions / natural next additions
 
 Roughly in order of value if you want to extend this:
 
-1. **Historical/temporal context.** Right now every source is a point-in-time
-   snapshot. AbuseIPDB and VirusTotal both include "first seen"/"last
-   reported" timestamps already surfaced in `details` — worth promoting into
-   the headline report (an IP maliciously active yesterday is a different
-   story than one whose worst report was 3 years ago).
+1. **Deeper temporal context.** The verdict now shows the most recent flagged
+   date and won't let a lone stale hit force `malicious` (see "How the verdict
+   is computed"). Still room to go further: a proper age-decay on each source's
+   score, and pulling dates out of more sources (VT's `last_analysis_date`,
+   OTX pulse timestamps).
 2. **CIDR/subnet rollup.** If you're investigating an incident, seeing "this
    /24 has 6 other IPs also flagged in the last 90 days" is often more
    actionable than any single-IP verdict. (`iprep batch` gets you partway
@@ -284,9 +313,11 @@ src/iprep/
   base.py        SourceResult - the normalized shape every source returns
   config.py      API key + settings loading/storage (env vars + `iprep keys`/`iprep config`-managed TOML)
   cache.py       disk cache for the blocklist-style feeds, with fetch validation
-  netutil.py     shared IPv4/IPv6 helpers (version detection, DNSBL query building)
+  netutil.py     shared IPv4/IPv6 helpers (version detection, DNSBL query building, Team Cymru origin lookup)
   context.py     shared HTTP session / DNS resolver / cache handed to sources
   aggregate.py   combines all SourceResults into one Verdict
+  temporal.py    pulls "last seen bad" dates out of source results; feeds the staleness guard
+  history.py     optional local SQLite journal of every check (`iprep config set journal on`)
   report.py      rich terminal rendering
   cli.py         argument parsing, parallel dispatch, JSON output
   sources/       one module per source, each exposing check(ip, ctx) -> SourceResult

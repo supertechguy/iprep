@@ -22,3 +22,7 @@ crowdsec = ""
 # tags each looked-up IP as LOCAL (same country) or FOREIGN. Leave blank to
 # just report the location without tagging.
 home_country = ""
+# "on" to journal every check to a local SQLite DB (~/.local/share/iprep/
+# history.db) so `iprep history` can show how a verdict has changed over time.
+# Anything else (or blank) = off.
+journal = ""
